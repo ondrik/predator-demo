@@ -160,13 +160,12 @@ async function unpack(text) {
 }
 
 $("share").addEventListener("click", async () => {
+  // always the code itself (not #example=...), so that the link keeps showing this program even
+  // if the examples change
   const params = new URLSearchParams();
-  if (exampleSel.value) params.set("example", exampleSel.value);
-  else {
-    params.set("code", await pack(editor.getValue()));
-    params.set("file", safeName());
-    if (getArgs().length) params.set("args", getArgs().join(","));
-  }
+  params.set("code", await pack(editor.getValue()));
+  params.set("file", safeName());
+  if (getArgs().length) params.set("args", getArgs().join(","));
   const url = `${location.origin}${location.pathname}#${params}`;
   history.replaceState(null, "", url);
   try {
