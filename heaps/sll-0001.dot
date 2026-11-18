@@ -1,0 +1,8 @@
+digraph "sll-0001" {
+	label=<<FONT POINT-SIZE="18">sll-0001</FONT>>;
+	clusterrank=local;
+	labelloc=t;
+	"57" [shape=box, color=blue, fontcolor=blue, label="CL#3357:list [obj = #57] field#59"];
+	"lonely1" [shape=plaintext, fontcolor=blue, label="NULL"];
+	"57" -> "lonely1" [color=blue, fontcolor=blue];
+}

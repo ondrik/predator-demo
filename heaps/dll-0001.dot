@@ -1,0 +1,31 @@
+digraph "dll-0001" {
+	label=<<FONT POINT-SIZE="18">dll-0001</FONT>>;
+	clusterrank=local;
+	labelloc=t;
+subgraph "cluster1" {
+	rank=same;
+	label="";
+	color=black;
+	fontcolor=black;
+	bgcolor=white;
+	penwidth=1.0;
+	style=dashed;
+	"13" [shape=box, color=black, fontcolor=black, label="#13 [SC_ON_HEAP, size = 24 B]"];
+	"15" [shape=box, color=black, fontcolor=black, label=".next #15"];
+	"13" -> "15" [color=black, fontcolor=black, label="[+0]"];
+	"17" [shape=box, color=black, fontcolor=black, label=".prev #17"];
+	"13" -> "17" [color=black, fontcolor=black, label="[+8]"];
+	"20" [shape=box, color=gray, fontcolor=gray, style=dotted, label=".data #20 [size = 4B]"];
+	"13" -> "20" [color=black, fontcolor=black, label="[+16]"];
+}
+	"27" [shape=box, color=blue, fontcolor=blue, label="CL#3348:tail [obj = #27] field#28"];
+	"14" [shape=ellipse, penwidth=2, fontcolor=black, label="#14 [off = 0, obj = #13]"];
+	"14" -> "13" [color=black, fontcolor=black, label="[+0]"];
+	"lonely2" [shape=plaintext, fontcolor=blue, label="NULL"];
+	"15" -> "lonely2" [color=blue, fontcolor=blue];
+	"lonely3" [shape=plaintext, fontcolor=blue, label="NULL"];
+	"17" -> "lonely3" [color=blue, fontcolor=blue];
+	"lonely4" [shape=plaintext, fontcolor=red, label="[int] 42 = '*' (#8)"];
+	"20" -> "lonely4" [color=blue, fontcolor=blue];
+	"27" -> "14" [color=blue, fontcolor=blue];
+}

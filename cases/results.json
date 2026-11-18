@@ -1,0 +1,146 @@
+{
+  "predator": "15eb53c6 2026-10-01",
+  "gcc": "13.3.0",
+  "cases": {
+    "dll-sizeof-fixed": {
+      "command": "gcc -fplugin=libsl.so dll-sizeof-fixed.c",
+      "verdict": "safe",
+      "errors": 0,
+      "warnings": 0,
+      "output": [],
+      "seconds": 0.041
+    },
+    "dll-sizeof": {
+      "command": "gcc -fplugin=libsl.so dll-sizeof.c",
+      "verdict": "bug",
+      "errors": 1,
+      "warnings": 0,
+      "output": [
+        "dll-sizeof.c:17:13: error: dereferencing object of size 8B out of bounds",
+        "dll-sizeof.c:17:13: note: the pointer being dereferenced points 0B beyond a heap object of size 8B",
+        "dll-sizeof.c:28:16: note: from call of append()",
+        "dll-sizeof.c:24:5: note: from call of main()"
+      ],
+      "seconds": 0.025
+    },
+    "double-free-fixed": {
+      "command": "gcc -fplugin=libsl.so double-free-fixed.c",
+      "verdict": "safe",
+      "errors": 0,
+      "warnings": 0,
+      "output": [],
+      "seconds": 0.033
+    },
+    "double-free": {
+      "command": "gcc -fplugin=libsl.so double-free.c",
+      "verdict": "bug",
+      "errors": 1,
+      "warnings": 0,
+      "output": [
+        "double-free.c:31:5: error: double free by free()",
+        "double-free.c:37:12: note: from call of handle()",
+        "double-free.c:35:5: note: from call of main()"
+      ],
+      "seconds": 0.03
+    },
+    "kernel-list-fixed": {
+      "command": "gcc -fplugin=libsl.so kernel-list-fixed.c",
+      "verdict": "safe",
+      "errors": 0,
+      "warnings": 0,
+      "output": [],
+      "seconds": 0.026
+    },
+    "kernel-list": {
+      "command": "gcc -fplugin=libsl.so kernel-list.c",
+      "verdict": "bug",
+      "errors": 1,
+      "warnings": 0,
+      "output": [
+        "kernel-list.c:58:5: error: dereference of already deleted heap object"
+      ],
+      "seconds": 0.029
+    },
+    "oom-fixed": {
+      "command": "gcc -fplugin=libsl.so -fplugin-arg-libsl-args=oom oom-fixed.c",
+      "verdict": "safe",
+      "errors": 0,
+      "warnings": 0,
+      "output": [],
+      "seconds": 0.029
+    },
+    "oom-half": {
+      "command": "gcc -fplugin=libsl.so -fplugin-arg-libsl-args=oom oom-half.c",
+      "verdict": "bug",
+      "errors": 0,
+      "warnings": 1,
+      "output": [
+        "oom-half.c:16:8: warning: memory leak detected while destroying a variable on stack",
+        "oom-half.c:31:24: note: from call of buffer_new()",
+        "oom-half.c:29:5: note: from call of main()"
+      ],
+      "seconds": 0.029
+    },
+    "oom": {
+      "command": "gcc -fplugin=libsl.so -fplugin-arg-libsl-args=oom oom.c",
+      "verdict": "bug",
+      "errors": 3,
+      "warnings": 0,
+      "output": [
+        "oom.c:13:13: error: dereference of NULL value",
+        "oom.c:27:24: note: from call of buffer_new()",
+        "oom.c:25:5: note: from call of main()",
+        "oom.c:13:13: error: dereference of NULL value",
+        "oom.c:27:24: note: from call of buffer_new()",
+        "oom.c:25:5: note: from call of main()",
+        "oom.c:15:5: error: dereference of NULL value",
+        "oom.c:27:24: note: from call of buffer_new()",
+        "oom.c:25:5: note: from call of main()"
+      ],
+      "seconds": 0.031
+    },
+    "sll-free-fixed": {
+      "command": "gcc -fplugin=libsl.so sll-free-fixed.c",
+      "verdict": "safe",
+      "errors": 0,
+      "warnings": 0,
+      "output": [],
+      "seconds": 0.029
+    },
+    "sll-free": {
+      "command": "gcc -fplugin=libsl.so sll-free.c",
+      "verdict": "bug",
+      "errors": 1,
+      "warnings": 1,
+      "output": [
+        "sll-free.c:28:9: warning: memory leak detected while destroying a heap object",
+        "sll-free.c:35:5: note: from call of destroy()",
+        "sll-free.c:33:5: note: from call of main()",
+        "sll-free.c:29:11: error: dereference of already deleted heap object",
+        "sll-free.c:35:5: note: from call of destroy()",
+        "sll-free.c:33:5: note: from call of main()"
+      ],
+      "seconds": 0.026
+    },
+    "sll-reverse-fixed": {
+      "command": "gcc -fplugin=libsl.so sll-reverse-fixed.c",
+      "verdict": "safe",
+      "errors": 0,
+      "warnings": 0,
+      "output": [],
+      "seconds": 0.029
+    },
+    "sll-reverse": {
+      "command": "gcc -fplugin=libsl.so sll-reverse.c",
+      "verdict": "bug",
+      "errors": 0,
+      "warnings": 1,
+      "output": [
+        "sll-reverse.c:28:17: warning: memory leak detected while assigning a heap object",
+        "sll-reverse.c:46:5: note: from call of reverse()",
+        "sll-reverse.c:44:5: note: from call of main()"
+      ],
+      "seconds": 0.026
+    }
+  }
+}

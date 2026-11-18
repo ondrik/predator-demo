@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Finding memory bugs with Predator</title>
+<meta name="description" content="Six classes of memory-safety bugs in C programs with linked lists (use after free, leaks, out-of-bounds writes, NULL dereferences, double free, Linux kernel lists) found or proved absent with the Predator shape analyser.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="hero">
+  <div class="wrap">
+    <p class="eyebrow">Predator · shape analysis for C</p>
+    <h1>Finding memory bugs in C programs<br>with linked lists</h1>
+    <p class="lede">Use after free, leaks, double frees and out-of-bounds writes often hide in pointer-heavy
+    code: list traversals, error paths, kernel-style intrusive lists. <a href="https://github.com/kdudka/predator">Predator</a>
+    is a static analyser that runs inside GCC as a plug-in. It explores <em>all</em> executions of a program,
+    including lists of any length, and either reports a memory error or verifies that there is none.</p>
+    <div class="stats">
+      <div><span class="big">{{TOTAL}}</span><span>programs</span></div>
+      <div><span class="big bugc">{{FOUND}}</span><span>buggy versions caught</span></div>
+      <div><span class="big safec">{{PROVED}}</span><span>fixes verified</span></div>
+      <div><span class="big">≤ {{SLOWEST}} s</span><span>per program</span></div>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+  <section class="how" id="how">
+    <h2>How it works</h2>
+    <ol class="flow">
+      <li><b>Compile as usual.</b> Predator is loaded into GCC with <code>-fplugin=libsl.so</code> and
+        analyses GCC's intermediate code, so it understands the same C as your compiler, macros and all.</li>
+      <li><b>Execute symbolically.</b> Starting from <code>main</code>, Predator runs the program on
+        <em>symbolic memory graphs</em>: heaps in which each block has a known size and each pointer a known
+        target and offset. Unknown input, written <code>__VERIFIER_nondet_int()</code> below, makes it
+        follow both branches of every condition that depends on it.</li>
+      <li><b>Abstract unbounded lists.</b> A loop that allocates nodes produces ever longer lists. Predator
+        folds a chain of similar nodes into a <em>list segment</em> that stands for any number of them,
+        so the analysis reaches a fixed point after a few iterations.</li>
+      <li><b>Check every step.</b> Each dereference, <code>free</code> and assignment is checked for
+        invalid pointers, out-of-bounds offsets and blocks that just became unreachable (leaks).
+        No error means the property holds for all runs of the program.</li>
+    </ol>
+
+    <figure class="abstraction">
+      <div class="scroll"><svg viewBox="0 0 760 236" role="img" aria-labelledby="abs-title">
+        <title id="abs-title">Infinitely many concrete lists are covered by two abstract heaps: NULL, or a segment of one or more nodes</title>
+        <defs>
+          <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" class="fillink"/>
+          </marker>
+        </defs>
+        <text x="0" y="16" class="hd">Concrete heaps after create()</text>
+        <g class="mono">
+          <text x="0" y="52">list</text><line x1="36" y1="48" x2="64" y2="48" class="edge" marker-end="url(#arr)"/><text x="70" y="52" class="mut">NULL</text>
+          <text x="0" y="92">list</text><line x1="36" y1="88" x2="64" y2="88" class="edge" marker-end="url(#arr)"/>
+          <rect x="68" y="76" width="34" height="24" rx="3" class="node"/><line x1="102" y1="88" x2="128" y2="88" class="edge" marker-end="url(#arr)"/><text x="134" y="92" class="mut">NULL</text>
+          <text x="0" y="132">list</text><line x1="36" y1="128" x2="64" y2="128" class="edge" marker-end="url(#arr)"/>
+          <rect x="68" y="116" width="34" height="24" rx="3" class="node"/><line x1="102" y1="128" x2="128" y2="128" class="edge" marker-end="url(#arr)"/>
+          <rect x="132" y="116" width="34" height="24" rx="3" class="node"/><line x1="166" y1="128" x2="192" y2="128" class="edge" marker-end="url(#arr)"/><text x="198" y="132" class="mut">NULL</text>
+          <text x="0" y="172">list</text><line x1="36" y1="168" x2="64" y2="168" class="edge" marker-end="url(#arr)"/>
+          <rect x="68" y="156" width="34" height="24" rx="3" class="node"/><line x1="102" y1="168" x2="128" y2="168" class="edge" marker-end="url(#arr)"/>
+          <rect x="132" y="156" width="34" height="24" rx="3" class="node"/><line x1="166" y1="168" x2="192" y2="168" class="edge" marker-end="url(#arr)"/>
+          <rect x="196" y="156" width="34" height="24" rx="3" class="node"/><line x1="230" y1="168" x2="256" y2="168" class="edge" marker-end="url(#arr)"/><text x="262" y="172" class="mut">NULL</text>
+          <text x="0" y="214" class="mut">… and so on, without bound</text>
+        </g>
+        <path d="M352 118 L 420 118" class="big-arrow" marker-end="url(#arr)"/>
+        <text x="386" y="104" class="cap" text-anchor="middle">abstraction</text>
+        <text x="450" y="16" class="hd">What Predator keeps: two heaps</text>
+        <g class="mono">
+          <text x="450" y="72">list</text><line x1="486" y1="68" x2="514" y2="68" class="edge" marker-end="url(#arr)"/><text x="520" y="72" class="mut">NULL</text>
+          <text x="450" y="150">list</text><line x1="486" y1="146" x2="514" y2="146" class="edge" marker-end="url(#arr)"/>
+          <rect x="518" y="122" width="132" height="48" rx="6" class="seg"/>
+          <rect x="532" y="134" width="34" height="24" rx="3" class="node"/>
+          <line x1="566" y1="146" x2="586" y2="146" class="edge dashed"/>
+          <text x="592" y="150" class="segtxt">· · ·</text>
+          <line x1="650" y1="146" x2="676" y2="146" class="edge" marker-end="url(#arr)"/><text x="682" y="150" class="mut">NULL</text>
+          <text x="584" y="190" class="segtxt" text-anchor="middle">SLS 1+  (one or more nodes)</text>
+        </g>
+      </svg></div>
+      <figcaption>A program that builds a list in a loop has infinitely many possible heaps. Predator
+      replaces chains of nodes by a <i>singly linked list segment</i> (SLS 1+), and the loop stops
+      producing new abstract heaps. Doubly linked lists, including the cyclic, intrusive lists of the
+      Linux kernel, get a DLS segment in the same way. Predator draws its heaps with Graphviz; here are the
+      real ones for the fixed <a href="heaps/sll.c">singly</a> and <a href="heaps/dll.c">doubly</a>
+      linked list examples:
+      <a href="heaps/sll-0000.svg">SLS 1+</a>, <a href="heaps/sll-0001.svg">NULL</a>;
+      <a href="heaps/dll-0000.svg">NULL</a>, <a href="heaps/dll-0001.svg">one node</a>,
+      <a href="heaps/dll-0002.svg">DLS 1+</a>.</figcaption>
+    </figure>
+
+    <p class="note">Each example below is a complete C program, and each shows what Predator printed
+    on it, line for line. Lines that Predator reports are highlighted in the code, and lines that a fix
+    changed are marked in green. The command line is shortened: the full one is in
+    <a href="{{REPO}}/blob/master/scripts/run-cases.sh">scripts/run-cases.sh</a>.</p>
+    <nav class="toc">
+      <ol>
+{{TOC}}
+      </ol>
+    </nav>
+  </section>
+{{STORIES}}
+  <section class="outro">
+    <h2>Why not just run Valgrind or AddressSanitizer?</h2>
+    <p>Dynamic checkers are excellent, but they see only the executions you run. All of the bugs
+    above need a particular path: a list of the right length, a <code>malloc</code> that fails, a parser that
+    gives up. If no test takes that path, the bug survives. Predator checks every path symbolically, so when
+    it reports no errors, the fix is correct for all inputs, not only for the ones in the test suite.</p>
+    <p>The price is scope. Predator analyses whole sequential programs, and its abstraction is built for
+    linked data structures: singly, doubly and cyclic lists, lists of lists, and lists embedded in other
+    structures. Its precision is byte-level: block sizes, field offsets, pointer arithmetic, <code>memset</code>
+    and <code>memcpy</code>, address alignment. Predator and its successor PredatorHP have won several medals
+    in the memory-safety categories of <a href="https://sv-comp.sosy-lab.org/">SV-COMP</a>.</p>
+    <p>Want to try it on your own code? Build it from <a href="https://github.com/kdudka/predator">kdudka/predator</a>
+    (<code>./switch-host-gcc.sh /usr/bin/gcc</code>), then run
+    <code>gcc -fplugin=sl_build/libsl.so -S -o /dev/null file.c</code>. More details are on the
+    <a href="https://www.fit.vut.cz/research/group/verifit/public/tools/predator/">project page</a> and in the paper
+    <a href="https://doi.org/10.1007/978-3-642-38856-9_13">Byte-Precise Verification of Low-Level List
+    Manipulation</a> (SAS 2013). All programs from this page are in
+    <a href="{{REPO}}/tree/master/cases">cases/</a>.</p>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">Results from Predator {{PREDATOR}} built against GCC {{GCC}}, with default options
+  (plus <code>oom</code> where shown). Source of this page: <a href="{{REPO}}">ondrik/predator-demo</a>.</div>
+</footer>
+</body>
+</html>

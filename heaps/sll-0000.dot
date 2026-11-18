@@ -1,0 +1,27 @@
+digraph "sll-0000" {
+	label=<<FONT POINT-SIZE="18">sll-0000</FONT>>;
+	clusterrank=local;
+	labelloc=t;
+subgraph "cluster1" {
+	rank=same;
+	label="SLS 1+, head [+0], next [+0]";
+	color=red;
+	fontcolor=red;
+	bgcolor=white;
+	penwidth=3.0;
+	style=dashed;
+	"6" [shape=box, color=red, fontcolor=red, label="#6 [SC_ON_HEAP, size = 16 B]"];
+	"7" [shape=box, color=red, fontcolor=red, penwidth=3.0, style=dashed, label=".next #7"];
+	"6" -> "7" [color=black, fontcolor=black, label="[+0]"];
+	"8" [shape=box, color=gray, fontcolor=gray, style=dotted, label=".data #8 [size = 4B]"];
+	"6" -> "8" [color=black, fontcolor=black, label="[+8]"];
+}
+	"41" [shape=box, color=blue, fontcolor=blue, label="CL#3357:list [obj = #41] field#43"];
+	"9" [shape=ellipse, penwidth=2, fontcolor=chartreuse2, label="#9 [off = 0, TS_FIRST, obj = #6]"];
+	"9" -> "6" [color=black, fontcolor=black, label="[+0]"];
+	"lonely2" [shape=plaintext, fontcolor=blue, label="NULL"];
+	"7" -> "lonely2" [color=blue, fontcolor=blue];
+	"lonely3" [shape=plaintext, fontcolor=blue, label="[int] 0"];
+	"8" -> "lonely3" [color=blue, fontcolor=blue];
+	"41" -> "9" [color=blue, fontcolor=blue];
+}

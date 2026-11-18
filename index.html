@@ -1,0 +1,1024 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Finding memory bugs with Predator</title>
+<meta name="description" content="Six classes of memory-safety bugs in C programs with linked lists (use after free, leaks, out-of-bounds writes, NULL dereferences, double free, Linux kernel lists) found or proved absent with the Predator shape analyser.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="hero">
+  <div class="wrap">
+    <p class="eyebrow">Predator · shape analysis for C</p>
+    <h1>Finding memory bugs in C programs<br>with linked lists</h1>
+    <p class="lede">Use after free, leaks, double frees and out-of-bounds writes often hide in pointer-heavy
+    code: list traversals, error paths, kernel-style intrusive lists. <a href="https://github.com/kdudka/predator">Predator</a>
+    is a static analyser that runs inside GCC as a plug-in. It explores <em>all</em> executions of a program,
+    including lists of any length, and either reports a memory error or verifies that there is none.</p>
+    <div class="stats">
+      <div><span class="big">13</span><span>programs</span></div>
+      <div><span class="big bugc">7</span><span>buggy versions caught</span></div>
+      <div><span class="big safec">6</span><span>fixes verified</span></div>
+      <div><span class="big">≤ 0.04 s</span><span>per program</span></div>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+  <section class="how" id="how">
+    <h2>How it works</h2>
+    <ol class="flow">
+      <li><b>Compile as usual.</b> Predator is loaded into GCC with <code>-fplugin=libsl.so</code> and
+        analyses GCC's intermediate code, so it understands the same C as your compiler, macros and all.</li>
+      <li><b>Execute symbolically.</b> Starting from <code>main</code>, Predator runs the program on
+        <em>symbolic memory graphs</em>: heaps in which each block has a known size and each pointer a known
+        target and offset. Unknown input, written <code>__VERIFIER_nondet_int()</code> below, makes it
+        follow both branches of every condition that depends on it.</li>
+      <li><b>Abstract unbounded lists.</b> A loop that allocates nodes produces ever longer lists. Predator
+        folds a chain of similar nodes into a <em>list segment</em> that stands for any number of them,
+        so the analysis reaches a fixed point after a few iterations.</li>
+      <li><b>Check every step.</b> Each dereference, <code>free</code> and assignment is checked for
+        invalid pointers, out-of-bounds offsets and blocks that just became unreachable (leaks).
+        No error means the property holds for all runs of the program.</li>
+    </ol>
+
+    <figure class="abstraction">
+      <div class="scroll"><svg viewBox="0 0 760 236" role="img" aria-labelledby="abs-title">
+        <title id="abs-title">Infinitely many concrete lists are covered by two abstract heaps: NULL, or a segment of one or more nodes</title>
+        <defs>
+          <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" class="fillink"/>
+          </marker>
+        </defs>
+        <text x="0" y="16" class="hd">Concrete heaps after create()</text>
+        <g class="mono">
+          <text x="0" y="52">list</text><line x1="36" y1="48" x2="64" y2="48" class="edge" marker-end="url(#arr)"/><text x="70" y="52" class="mut">NULL</text>
+          <text x="0" y="92">list</text><line x1="36" y1="88" x2="64" y2="88" class="edge" marker-end="url(#arr)"/>
+          <rect x="68" y="76" width="34" height="24" rx="3" class="node"/><line x1="102" y1="88" x2="128" y2="88" class="edge" marker-end="url(#arr)"/><text x="134" y="92" class="mut">NULL</text>
+          <text x="0" y="132">list</text><line x1="36" y1="128" x2="64" y2="128" class="edge" marker-end="url(#arr)"/>
+          <rect x="68" y="116" width="34" height="24" rx="3" class="node"/><line x1="102" y1="128" x2="128" y2="128" class="edge" marker-end="url(#arr)"/>
+          <rect x="132" y="116" width="34" height="24" rx="3" class="node"/><line x1="166" y1="128" x2="192" y2="128" class="edge" marker-end="url(#arr)"/><text x="198" y="132" class="mut">NULL</text>
+          <text x="0" y="172">list</text><line x1="36" y1="168" x2="64" y2="168" class="edge" marker-end="url(#arr)"/>
+          <rect x="68" y="156" width="34" height="24" rx="3" class="node"/><line x1="102" y1="168" x2="128" y2="168" class="edge" marker-end="url(#arr)"/>
+          <rect x="132" y="156" width="34" height="24" rx="3" class="node"/><line x1="166" y1="168" x2="192" y2="168" class="edge" marker-end="url(#arr)"/>
+          <rect x="196" y="156" width="34" height="24" rx="3" class="node"/><line x1="230" y1="168" x2="256" y2="168" class="edge" marker-end="url(#arr)"/><text x="262" y="172" class="mut">NULL</text>
+          <text x="0" y="214" class="mut">… and so on, without bound</text>
+        </g>
+        <path d="M352 118 L 420 118" class="big-arrow" marker-end="url(#arr)"/>
+        <text x="386" y="104" class="cap" text-anchor="middle">abstraction</text>
+        <text x="450" y="16" class="hd">What Predator keeps: two heaps</text>
+        <g class="mono">
+          <text x="450" y="72">list</text><line x1="486" y1="68" x2="514" y2="68" class="edge" marker-end="url(#arr)"/><text x="520" y="72" class="mut">NULL</text>
+          <text x="450" y="150">list</text><line x1="486" y1="146" x2="514" y2="146" class="edge" marker-end="url(#arr)"/>
+          <rect x="518" y="122" width="132" height="48" rx="6" class="seg"/>
+          <rect x="532" y="134" width="34" height="24" rx="3" class="node"/>
+          <line x1="566" y1="146" x2="586" y2="146" class="edge dashed"/>
+          <text x="592" y="150" class="segtxt">· · ·</text>
+          <line x1="650" y1="146" x2="676" y2="146" class="edge" marker-end="url(#arr)"/><text x="682" y="150" class="mut">NULL</text>
+          <text x="584" y="190" class="segtxt" text-anchor="middle">SLS 1+  (one or more nodes)</text>
+        </g>
+      </svg></div>
+      <figcaption>A program that builds a list in a loop has infinitely many possible heaps. Predator
+      replaces chains of nodes by a <i>singly linked list segment</i> (SLS 1+), and the loop stops
+      producing new abstract heaps. Doubly linked lists, including the cyclic, intrusive lists of the
+      Linux kernel, get a DLS segment in the same way. Predator draws its heaps with Graphviz; here are the
+      real ones for the fixed <a href="heaps/sll.c">singly</a> and <a href="heaps/dll.c">doubly</a>
+      linked list examples:
+      <a href="heaps/sll-0000.svg">SLS 1+</a>, <a href="heaps/sll-0001.svg">NULL</a>;
+      <a href="heaps/dll-0000.svg">NULL</a>, <a href="heaps/dll-0001.svg">one node</a>,
+      <a href="heaps/dll-0002.svg">DLS 1+</a>.</figcaption>
+    </figure>
+
+    <p class="note">Each example below is a complete C program, and each shows what Predator printed
+    on it, line for line. Lines that Predator reports are highlighted in the code, and lines that a fix
+    changed are marked in green. The command line is shortened: the full one is in
+    <a href="https://github.com/ondrik/predator-demo/blob/master/scripts/run-cases.sh">scripts/run-cases.sh</a>.</p>
+    <nav class="toc">
+      <ol>
+<li><a href="#use-after-free">Use after free while destroying a list</a> <span class="cwe">CWE-416</span></li>
+<li><a href="#leak">Losing a list while reversing it</a> <span class="cwe">CWE-401</span></li>
+<li><a href="#out-of-bounds">Allocating the size of a pointer</a> <span class="cwe">CWE-131</span></li>
+<li><a href="#null">Unchecked malloc</a> <span class="cwe">CWE-476</span></li>
+<li><a href="#double-free">Double free on an error path</a> <span class="cwe">CWE-415</span></li>
+<li><a href="#kernel-list">Freeing while iterating a Linux kernel list</a> <span class="cwe">CWE-416</span></li>
+      </ol>
+    </nav>
+  </section>
+
+  <section class="story" id="use-after-free">
+    <div class="story-head">
+      <span class="cwe">CWE-416</span>
+      <h2><a href="#use-after-free">Use after free while destroying a list</a></h2>
+    </div>
+    <p class="intro">The first bug almost everyone writes when freeing a linked list. <code>create()</code>
+builds a list whose length depends on input that Predator does not know
+(<code>__VERIFIER_nondet_int()</code>), so the analysis has to cover lists of <em>every</em> length,
+including the empty one.</p>
+    
+    <div class="step">
+      <div class="step-head"><span class="num">1</span><h3>The original loop</h3><span class="verdict bug">bug found · 1 error, 1 warning</span></div>
+      <div class="pane">
+        <div class="pane-label"><span>cases/sll-free.c</span></div>
+        <div class="code"><div class="ln gap"><span class="no">⋮</span><span class="tx"></span></div><div class="ln"><span class="no">25</span><span class="tx"><span class="k">void</span> destroy(<span class="k">struct</span> node *p)</span></div><div class="ln"><span class="no">26</span><span class="tx">{</span></div><div class="ln"><span class="no">27</span><span class="tx">    <span class="k">while</span> (p) {</span></div><div class="ln warn"><span class="no">28</span><span class="tx">        <span class="f">free</span>(p);</span></div><div class="callout warning"><span class="no"></span><span class="tx">▲ warning: memory leak detected while destroying a heap object</span></div><div class="ln err"><span class="no">29</span><span class="tx">        p = p-&gt;next;</span></div><div class="callout error"><span class="no"></span><span class="tx">▲ error: dereference of already deleted heap object</span></div><div class="ln"><span class="no">30</span><span class="tx">    }</span></div><div class="ln"><span class="no">31</span><span class="tx">}</span></div><div class="ln"><span class="no">32</span><span class="tx"> </span></div><div class="ln noteline"><span class="no">33</span><span class="tx"><span class="k">int</span> main(<span class="k">void</span>)</span></div><div class="ln"><span class="no">34</span><span class="tx">{</span></div><div class="ln noteline"><span class="no">35</span><span class="tx">    destroy(create());</span></div><div class="ln"><span class="no">36</span><span class="tx">    <span class="k">return</span> 0;</span></div><div class="ln"><span class="no">37</span><span class="tx">}</span></div></div>
+      </div>
+      <div class="pane out">
+        <div class="pane-label"><span>$ gcc -fplugin=libsl.so sll-free.c</span><span>0.03 s</span></div>
+        <pre class="term"><span class="loc">sll-free.c:28:9: </span><span class="warning">warning:</span> memory leak detected while destroying a heap object
+<span class="loc">sll-free.c:35:5: </span><span class="note">note:</span> from call of destroy()
+<span class="loc">sll-free.c:33:5: </span><span class="note">note:</span> from call of main()
+<span class="loc">sll-free.c:29:11: </span><span class="error">error:</span> dereference of already deleted heap object
+<span class="loc">sll-free.c:35:5: </span><span class="note">note:</span> from call of destroy()
+<span class="loc">sll-free.c:33:5: </span><span class="note">note:</span> from call of main()</pre>
+      </div>
+      <p class="after">Predator reports the read of <code>p-&gt;next</code> on line 29 after
+<code>p</code> was freed on line 28. It also reports a leak on line 28: once the node is freed,
+nothing valid points to the rest of the list, so it can never be freed. One bug, two
+consequences.</p>
+      <details>
+        <summary>Whole program <span class="file">37 lines</span></summary>
+        <pre class="full"><code><span class="k">#include</span> &lt;stdlib.h&gt;
+
+<span class="k">extern</span> <span class="k">int</span> <span class="f">__VERIFIER_nondet_int</span>(<span class="k">void</span>);
+
+<span class="k">struct</span> node {
+    <span class="k">struct</span> node *next;
+    <span class="k">int</span> data;
+};
+
+<span class="c">/* build a list of unknown length */</span>
+<span class="k">struct</span> node *create(<span class="k">void</span>)
+{
+    <span class="k">struct</span> node *head = <span class="k">NULL</span>;
+    <span class="k">while</span> (<span class="f">__VERIFIER_nondet_int</span>()) {
+        <span class="k">struct</span> node *n = <span class="f">malloc</span>(<span class="k">sizeof</span> *n);
+        <span class="k">if</span> (!n)
+            <span class="f">abort</span>();
+        n-&gt;next = head;
+        n-&gt;data = 0;
+        head = n;
+    }
+    <span class="k">return</span> head;
+}
+
+<span class="k">void</span> destroy(<span class="k">struct</span> node *p)
+{
+    <span class="k">while</span> (p) {
+        <span class="f">free</span>(p);
+        p = p-&gt;next;
+    }
+}
+
+<span class="k">int</span> main(<span class="k">void</span>)
+{
+    destroy(create());
+    <span class="k">return</span> 0;
+}
+</code></pre>
+      </details>
+    </div>
+    <div class="step">
+      <div class="step-head"><span class="num">2</span><h3>The fix: save the successor first</h3><span class="verdict safe">verified · no memory errors</span></div>
+      <div class="pane">
+        <div class="pane-label"><span>cases/sll-free-fixed.c</span><span class="legend"><i class="add-key"></i>changed</span></div>
+        <div class="code"><div class="ln gap"><span class="no">⋮</span><span class="tx"></span></div><div class="ln"><span class="no">25</span><span class="tx"><span class="k">void</span> destroy(<span class="k">struct</span> node *p)</span></div><div class="ln"><span class="no">26</span><span class="tx">{</span></div><div class="ln"><span class="no">27</span><span class="tx">    <span class="k">while</span> (p) {</span></div><div class="ln add"><span class="no">28</span><span class="tx">        <span class="k">struct</span> node *next = p-&gt;next;</span></div><div class="ln"><span class="no">29</span><span class="tx">        <span class="f">free</span>(p);</span></div><div class="ln add"><span class="no">30</span><span class="tx">        p = next;</span></div><div class="ln"><span class="no">31</span><span class="tx">    }</span></div><div class="ln"><span class="no">32</span><span class="tx">}</span></div><div class="ln"><span class="no">33</span><span class="tx"> </span></div><div class="ln"><span class="no">34</span><span class="tx"><span class="k">int</span> main(<span class="k">void</span>)</span></div><div class="ln"><span class="no">35</span><span class="tx">{</span></div><div class="ln"><span class="no">36</span><span class="tx">    destroy(create());</span></div><div class="ln"><span class="no">37</span><span class="tx">    <span class="k">return</span> 0;</span></div><div class="ln"><span class="no">38</span><span class="tx">}</span></div></div>
+      </div>
+      <div class="pane out">
+        <div class="pane-label"><span>$ gcc -fplugin=libsl.so sll-free-fixed.c</span><span>0.03 s</span></div>
+        <pre class="term"><span class="quiet">(no diagnostics)</span></pre>
+      </div>
+      <p class="after">No errors and no warnings. Predator does not try lengths 0, 1, 2, …
+up to some bound. It finds a finite set of abstract heaps that covers lists of any length
+(see <a href="#how">How it works</a>), so this result holds for all of them.</p>
+      <details>
+        <summary>Whole program <span class="file">38 lines</span></summary>
+        <pre class="full"><code><span class="k">#include</span> &lt;stdlib.h&gt;
+
+<span class="k">extern</span> <span class="k">int</span> <span class="f">__VERIFIER_nondet_int</span>(<span class="k">void</span>);
+
+<span class="k">struct</span> node {
+    <span class="k">struct</span> node *next;
+    <span class="k">int</span> data;
+};
+
+<span class="c">/* build a list of unknown length */</span>
+<span class="k">struct</span> node *create(<span class="k">void</span>)
+{
+    <span class="k">struct</span> node *head = <span class="k">NULL</span>;
+    <span class="k">while</span> (<span class="f">__VERIFIER_nondet_int</span>()) {
+        <span class="k">struct</span> node *n = <span class="f">malloc</span>(<span class="k">sizeof</span> *n);
+        <span class="k">if</span> (!n)
+            <span class="f">abort</span>();
+        n-&gt;next = head;
+        n-&gt;data = 0;
+        head = n;
+    }
+    <span class="k">return</span> head;
+}
+
+<span class="k">void</span> destroy(<span class="k">struct</span> node *p)
+{
+    <span class="k">while</span> (p) {
+        <span class="k">struct</span> node *next = p-&gt;next;
+        <span class="f">free</span>(p);
+        p = next;
+    }
+}
+
+<span class="k">int</span> main(<span class="k">void</span>)
+{
+    destroy(create());
+    <span class="k">return</span> 0;
+}
+</code></pre>
+      </details>
+    </div>
+  </section>
+
+  <section class="story" id="leak">
+    <div class="story-head">
+      <span class="cwe">CWE-401</span>
+      <h2><a href="#leak">Losing a list while reversing it</a></h2>
+    </div>
+    <p class="intro">In-place reversal is a classic exam question. The order of the four pointer
+assignments matters, and a wrong order does not crash. It quietly drops most of the list,
+so tests that only check the result for short lists can miss it.</p>
+    
+    <div class="step">
+      <div class="step-head"><span class="num">1</span><h3>Assignments in the wrong order</h3><span class="verdict bug">bug found · 1 warning</span></div>
+      <div class="pane">
+        <div class="pane-label"><span>cases/sll-reverse.c</span></div>
+        <div class="code"><div class="ln gap"><span class="no">⋮</span><span class="tx"></span></div><div class="ln"><span class="no">24</span><span class="tx"><span class="k">struct</span> node *reverse(<span class="k">struct</span> node *p)</span></div><div class="ln"><span class="no">25</span><span class="tx">{</span></div><div class="ln"><span class="no">26</span><span class="tx">    <span class="k">struct</span> node *prev = <span class="k">NULL</span>;</span></div><div class="ln"><span class="no">27</span><span class="tx">    <span class="k">while</span> (p) {</span></div><div class="ln warn"><span class="no">28</span><span class="tx">        p-&gt;next = prev;</span></div><div class="callout warning"><span class="no"></span><span class="tx">▲ warning: memory leak detected while assigning a heap object</span></div><div class="ln"><span class="no">29</span><span class="tx">        prev = p;</span></div><div class="ln"><span class="no">30</span><span class="tx">        p = p-&gt;next;</span></div><div class="ln"><span class="no">31</span><span class="tx">    }</span></div><div class="ln"><span class="no">32</span><span class="tx">    <span class="k">return</span> prev;</span></div><div class="ln"><span class="no">33</span><span class="tx">}</span></div><div class="ln gap"><span class="no">⋮</span><span class="tx"></span></div><div class="ln noteline"><span class="no">44</span><span class="tx"><span class="k">int</span> main(<span class="k">void</span>)</span></div><div class="ln"><span class="no">45</span><span class="tx">{</span></div><div class="ln noteline"><span class="no">46</span><span class="tx">    destroy(reverse(create()));</span></div><div class="ln"><span class="no">47</span><span class="tx">    <span class="k">return</span> 0;</span></div><div class="ln"><span class="no">48</span><span class="tx">}</span></div></div>
+      </div>
+      <div class="pane out">
+        <div class="pane-label"><span>$ gcc -fplugin=libsl.so sll-reverse.c</span><span>0.03 s</span></div>
+        <pre class="term"><span class="loc">sll-reverse.c:28:17: </span><span class="warning">warning:</span> memory leak detected while assigning a heap object
+<span class="loc">sll-reverse.c:46:5: </span><span class="note">note:</span> from call of reverse()
+<span class="loc">sll-reverse.c:44:5: </span><span class="note">note:</span> from call of main()</pre>
+      </div>
+      <p class="after">Line 28 overwrites <code>p-&gt;next</code> before it is saved, and line 30
+then reads the new value, which is <code>prev</code>. The loop stops after the first node and the
+remaining nodes are unreachable. Predator reports the leak on the assignment that loses the last
+pointer to them.</p>
+      <details>
+        <summary>Whole program <span class="file">48 lines</span></summary>
+        <pre class="full"><code><span class="k">#include</span> &lt;stdlib.h&gt;
+
+<span class="k">extern</span> <span class="k">int</span> <span class="f">__VERIFIER_nondet_int</span>(<span class="k">void</span>);
+
+<span class="k">struct</span> node {
+    <span class="k">struct</span> node *next;
+    <span class="k">int</span> data;
+};
+
+<span class="k">struct</span> node *create(<span class="k">void</span>)
+{
+    <span class="k">struct</span> node *head = <span class="k">NULL</span>;
+    <span class="k">while</span> (<span class="f">__VERIFIER_nondet_int</span>()) {
+        <span class="k">struct</span> node *n = <span class="f">malloc</span>(<span class="k">sizeof</span> *n);
+        <span class="k">if</span> (!n)
+            <span class="f">abort</span>();
+        n-&gt;next = head;
+        n-&gt;data = 0;
+        head = n;
+    }
+    <span class="k">return</span> head;
+}
+
+<span class="k">struct</span> node *reverse(<span class="k">struct</span> node *p)
+{
+    <span class="k">struct</span> node *prev = <span class="k">NULL</span>;
+    <span class="k">while</span> (p) {
+        p-&gt;next = prev;
+        prev = p;
+        p = p-&gt;next;
+    }
+    <span class="k">return</span> prev;
+}
+
+<span class="k">void</span> destroy(<span class="k">struct</span> node *p)
+{
+    <span class="k">while</span> (p) {
+        <span class="k">struct</span> node *next = p-&gt;next;
+        <span class="f">free</span>(p);
+        p = next;
+    }
+}
+
+<span class="k">int</span> main(<span class="k">void</span>)
+{
+    destroy(reverse(create()));
+    <span class="k">return</span> 0;
+}
+</code></pre>
+      </details>
+    </div>
+    <div class="step">
+      <div class="step-head"><span class="num">2</span><h3>The fix: save, relink, advance</h3><span class="verdict safe">verified · no memory errors</span></div>
+      <div class="pane">
+        <div class="pane-label"><span>cases/sll-reverse-fixed.c</span><span class="legend"><i class="add-key"></i>changed</span></div>
+        <div class="code"><div class="ln gap"><span class="no">⋮</span><span class="tx"></span></div><div class="ln"><span class="no">24</span><span class="tx"><span class="k">struct</span> node *reverse(<span class="k">struct</span> node *p)</span></div><div class="ln"><span class="no">25</span><span class="tx">{</span></div><div class="ln"><span class="no">26</span><span class="tx">    <span class="k">struct</span> node *prev = <span class="k">NULL</span>;</span></div><div class="ln"><span class="no">27</span><span class="tx">    <span class="k">while</span> (p) {</span></div><div class="ln add"><span class="no">28</span><span class="tx">        <span class="k">struct</span> node *next = p-&gt;next;</span></div><div class="ln"><span class="no">29</span><span class="tx">        p-&gt;next = prev;</span></div><div class="ln"><span class="no">30</span><span class="tx">        prev = p;</span></div><div class="ln add"><span class="no">31</span><span class="tx">        p = next;</span></div><div class="ln"><span class="no">32</span><span class="tx">    }</span></div><div class="ln"><span class="no">33</span><span class="tx">    <span class="k">return</span> prev;</span></div><div class="ln"><span class="no">34</span><span class="tx">}</span></div><div class="ln gap"><span class="no">⋮</span><span class="tx"></span></div><div class="ln"><span class="no">45</span><span class="tx"><span class="k">int</span> main(<span class="k">void</span>)</span></div><div class="ln"><span class="no">46</span><span class="tx">{</span></div><div class="ln"><span class="no">47</span><span class="tx">    destroy(reverse(create()));</span></div><div class="ln"><span class="no">48</span><span class="tx">    <span class="k">return</span> 0;</span></div><div class="ln"><span class="no">49</span><span class="tx">}</span></div></div>
+      </div>
+      <div class="pane out">
+        <div class="pane-label"><span>$ gcc -fplugin=libsl.so sll-reverse-fixed.c</span><span>0.03 s</span></div>
+        <pre class="term"><span class="quiet">(no diagnostics)</span></pre>
+      </div>
+      <p class="after">With the successor saved first, every node stays reachable and
+<code>destroy()</code> frees all of them. Predator proves that for lists of any length.</p>
+      <details>
+        <summary>Whole program <span class="file">49 lines</span></summary>
+        <pre class="full"><code><span class="k">#include</span> &lt;stdlib.h&gt;
+
+<span class="k">extern</span> <span class="k">int</span> <span class="f">__VERIFIER_nondet_int</span>(<span class="k">void</span>);
+
+<span class="k">struct</span> node {
+    <span class="k">struct</span> node *next;
+    <span class="k">int</span> data;
+};
+
+<span class="k">struct</span> node *create(<span class="k">void</span>)
+{
+    <span class="k">struct</span> node *head = <span class="k">NULL</span>;
+    <span class="k">while</span> (<span class="f">__VERIFIER_nondet_int</span>()) {
+        <span class="k">struct</span> node *n = <span class="f">malloc</span>(<span class="k">sizeof</span> *n);
+        <span class="k">if</span> (!n)
+            <span class="f">abort</span>();
+        n-&gt;next = head;
+        n-&gt;data = 0;
+        head = n;
+    }
+    <span class="k">return</span> head;
+}
+
+<span class="k">struct</span> node *reverse(<span class="k">struct</span> node *p)
+{
+    <span class="k">struct</span> node *prev = <span class="k">NULL</span>;
+    <span class="k">while</span> (p) {
+        <span class="k">struct</span> node *next = p-&gt;next;
+        p-&gt;next = prev;
+        prev = p;
+        p = next;
+    }
+    <span class="k">return</span> prev;
+}
+
+<span class="k">void</span> destroy(<span class="k">struct</span> node *p)
+{
+    <span class="k">while</span> (p) {
+        <span class="k">struct</span> node *next = p-&gt;next;
+        <span class="f">free</span>(p);
+        p = next;
+    }
+}
+
+<span class="k">int</span> main(<span class="k">void</span>)
+{
+    destroy(reverse(create()));
+    <span class="k">return</span> 0;
+}
+</code></pre>
+      </details>
+    </div>
+  </section>
+
+  <section class="story" id="out-of-bounds">
+    <div class="story-head">
+      <span class="cwe">CWE-131</span>
+      <h2><a href="#out-of-bounds">Allocating the size of a pointer</a></h2>
+    </div>
+    <p class="intro">A doubly linked list node has two pointers and an <code>int</code>: 24 bytes on
+x86-64. <code>sizeof(n)</code> looks almost like <code>sizeof(*n)</code>, but it is the size of
+the pointer, 8 bytes. The program compiles without a warning and often runs fine, because
+<code>malloc</code> rounds small blocks up. Predator tracks the size of every block, byte by byte.</p>
+    
+    <div class="step">
+      <div class="step-head"><span class="num">1</span><h3>The original allocation</h3><span class="verdict bug">bug found · 1 error</span></div>
+      <div class="pane">
+        <div class="pane-label"><span>cases/dll-sizeof.c</span></div>
+        <div class="code"><div class="ln gap"><span class="no">⋮</span><span class="tx"></span></div><div class="ln"><span class="no">5</span><span class="tx"><span class="k">struct</span> node {</span></div><div class="ln"><span class="no">6</span><span class="tx">    <span class="k">struct</span> node *next;</span></div><div class="ln"><span class="no">7</span><span class="tx">    <span class="k">struct</span> node *prev;</span></div><div class="ln"><span class="no">8</span><span class="tx">    <span class="k">int</span> data;</span></div><div class="ln"><span class="no">9</span><span class="tx">};</span></div><div class="ln"><span class="no">10</span><span class="tx"> </span></div><div class="ln"><span class="no">11</span><span class="tx"><span class="k">struct</span> node *append(<span class="k">struct</span> node *tail, <span class="k">int</span> data)</span></div><div class="ln"><span class="no">12</span><span class="tx">{</span></div><div class="ln"><span class="no">13</span><span class="tx">    <span class="k">struct</span> node *n = <span class="f">malloc</span>(<span class="k">sizeof</span>(n));</span></div><div class="ln"><span class="no">14</span><span class="tx">    <span class="k">if</span> (!n)</span></div><div class="ln"><span class="no">15</span><span class="tx">        <span class="f">abort</span>();</span></div><div class="ln"><span class="no">16</span><span class="tx">    n-&gt;next = <span class="k">NULL</span>;</span></div><div class="ln err"><span class="no">17</span><span class="tx">    n-&gt;prev = tail;</span></div><div class="callout error"><span class="no"></span><span class="tx">▲ error: dereferencing object of size 8B out of bounds</span></div><div class="ln"><span class="no">18</span><span class="tx">    n-&gt;data = data;</span></div><div class="ln"><span class="no">19</span><span class="tx">    <span class="k">if</span> (tail)</span></div><div class="ln"><span class="no">20</span><span class="tx">        tail-&gt;next = n;</span></div><div class="ln"><span class="no">21</span><span class="tx">    <span class="k">return</span> n;</span></div><div class="ln"><span class="no">22</span><span class="tx">}</span></div><div class="ln gap"><span class="no">⋮</span><span class="tx"></span></div></div>
+      </div>
+      <div class="pane out">
+        <div class="pane-label"><span>$ gcc -fplugin=libsl.so dll-sizeof.c</span><span>0.03 s</span></div>
+        <pre class="term"><span class="loc">dll-sizeof.c:17:13: </span><span class="error">error:</span> dereferencing object of size 8B out of bounds
+<span class="loc">dll-sizeof.c:17:13: </span><span class="note">note:</span> the pointer being dereferenced points 0B beyond a heap object of size 8B
+<span class="loc">dll-sizeof.c:28:16: </span><span class="note">note:</span> from call of append()
+<span class="loc">dll-sizeof.c:24:5: </span><span class="note">note:</span> from call of main()</pre>
+      </div>
+      <p class="after">Writing <code>n-&gt;next</code> (offset 0) still fits into the 8 bytes.
+Writing <code>n-&gt;prev</code> on line 17 is the first access past the end of the block:
+<i>points 0B beyond a heap object of size 8B</i>.</p>
+      <details>
+        <summary>Whole program <span class="file">36 lines</span></summary>
+        <pre class="full"><code><span class="k">#include</span> &lt;stdlib.h&gt;
+
+<span class="k">extern</span> <span class="k">int</span> <span class="f">__VERIFIER_nondet_int</span>(<span class="k">void</span>);
+
+<span class="k">struct</span> node {
+    <span class="k">struct</span> node *next;
+    <span class="k">struct</span> node *prev;
+    <span class="k">int</span> data;
+};
+
+<span class="k">struct</span> node *append(<span class="k">struct</span> node *tail, <span class="k">int</span> data)
+{
+    <span class="k">struct</span> node *n = <span class="f">malloc</span>(<span class="k">sizeof</span>(n));
+    <span class="k">if</span> (!n)
+        <span class="f">abort</span>();
+    n-&gt;next = <span class="k">NULL</span>;
+    n-&gt;prev = tail;
+    n-&gt;data = data;
+    <span class="k">if</span> (tail)
+        tail-&gt;next = n;
+    <span class="k">return</span> n;
+}
+
+<span class="k">int</span> main(<span class="k">void</span>)
+{
+    <span class="k">struct</span> node *tail = <span class="k">NULL</span>;
+    <span class="k">while</span> (<span class="f">__VERIFIER_nondet_int</span>())
+        tail = append(tail, 42);
+
+    <span class="k">while</span> (tail) {
+        <span class="k">struct</span> node *prev = tail-&gt;prev;
+        <span class="f">free</span>(tail);
+        tail = prev;
+    }
+    <span class="k">return</span> 0;
+}
+</code></pre>
+      </details>
+    </div>
+    <div class="step">
+      <div class="step-head"><span class="num">2</span><h3>The fix: sizeof the object</h3><span class="verdict safe">verified · no memory errors</span></div>
+      <div class="pane">
+        <div class="pane-label"><span>cases/dll-sizeof-fixed.c</span><span class="legend"><i class="add-key"></i>changed</span></div>
+        <div class="code"><div class="ln gap"><span class="no">⋮</span><span class="tx"></span></div><div class="ln"><span class="no">5</span><span class="tx"><span class="k">struct</span> node {</span></div><div class="ln"><span class="no">6</span><span class="tx">    <span class="k">struct</span> node *next;</span></div><div class="ln"><span class="no">7</span><span class="tx">    <span class="k">struct</span> node *prev;</span></div><div class="ln"><span class="no">8</span><span class="tx">    <span class="k">int</span> data;</span></div><div class="ln"><span class="no">9</span><span class="tx">};</span></div><div class="ln"><span class="no">10</span><span class="tx"> </span></div><div class="ln"><span class="no">11</span><span class="tx"><span class="k">struct</span> node *append(<span class="k">struct</span> node *tail, <span class="k">int</span> data)</span></div><div class="ln"><span class="no">12</span><span class="tx">{</span></div><div class="ln add"><span class="no">13</span><span class="tx">    <span class="k">struct</span> node *n = <span class="f">malloc</span>(<span class="k">sizeof</span>(*n));</span></div><div class="ln"><span class="no">14</span><span class="tx">    <span class="k">if</span> (!n)</span></div><div class="ln"><span class="no">15</span><span class="tx">        <span class="f">abort</span>();</span></div><div class="ln"><span class="no">16</span><span class="tx">    n-&gt;next = <span class="k">NULL</span>;</span></div><div class="ln"><span class="no">17</span><span class="tx">    n-&gt;prev = tail;</span></div><div class="ln"><span class="no">18</span><span class="tx">    n-&gt;data = data;</span></div><div class="ln"><span class="no">19</span><span class="tx">    <span class="k">if</span> (tail)</span></div><div class="ln"><span class="no">20</span><span class="tx">        tail-&gt;next = n;</span></div><div class="ln"><span class="no">21</span><span class="tx">    <span class="k">return</span> n;</span></div><div class="ln"><span class="no">22</span><span class="tx">}</span></div><div class="ln gap"><span class="no">⋮</span><span class="tx"></span></div></div>
+      </div>
+      <div class="pane out">
+        <div class="pane-label"><span>$ gcc -fplugin=libsl.so dll-sizeof-fixed.c</span><span>0.04 s</span></div>
+        <pre class="term"><span class="quiet">(no diagnostics)</span></pre>
+      </div>
+      <p class="after">With the right size, all accesses are in bounds, and Predator also checks
+that the list is built and freed through the <code>prev</code> pointers without leaks.</p>
+      <details>
+        <summary>Whole program <span class="file">36 lines</span></summary>
+        <pre class="full"><code><span class="k">#include</span> &lt;stdlib.h&gt;
+
+<span class="k">extern</span> <span class="k">int</span> <span class="f">__VERIFIER_nondet_int</span>(<span class="k">void</span>);
+
+<span class="k">struct</span> node {
+    <span class="k">struct</span> node *next;
+    <span class="k">struct</span> node *prev;
+    <span class="k">int</span> data;
+};
+
+<span class="k">struct</span> node *append(<span class="k">struct</span> node *tail, <span class="k">int</span> data)
+{
+    <span class="k">struct</span> node *n = <span class="f">malloc</span>(<span class="k">sizeof</span>(*n));
+    <span class="k">if</span> (!n)
+        <span class="f">abort</span>();
+    n-&gt;next = <span class="k">NULL</span>;
+    n-&gt;prev = tail;
+    n-&gt;data = data;
+    <span class="k">if</span> (tail)
+        tail-&gt;next = n;
+    <span class="k">return</span> n;
+}
+
+<span class="k">int</span> main(<span class="k">void</span>)
+{
+    <span class="k">struct</span> node *tail = <span class="k">NULL</span>;
+    <span class="k">while</span> (<span class="f">__VERIFIER_nondet_int</span>())
+        tail = append(tail, 42);
+
+    <span class="k">while</span> (tail) {
+        <span class="k">struct</span> node *prev = tail-&gt;prev;
+        <span class="f">free</span>(tail);
+        tail = prev;
+    }
+    <span class="k">return</span> 0;
+}
+</code></pre>
+      </details>
+    </div>
+  </section>
+
+  <section class="story" id="null">
+    <div class="story-head">
+      <span class="cwe">CWE-476</span>
+      <h2><a href="#null">Unchecked malloc</a></h2>
+    </div>
+    <p class="intro">By default Predator assumes that <code>malloc</code> succeeds, which is what most
+programs implicitly assume as well. With the <code>oom</code> option, every <code>malloc</code>
+may also return <code>NULL</code>, and Predator checks both outcomes of each call.</p>
+    
+    <div class="step">
+      <div class="step-head"><span class="num">1</span><h3>No checks at all</h3><span class="verdict bug">bug found · 3 errors</span></div>
+      <div class="pane">
+        <div class="pane-label"><span>cases/oom.c</span></div>
+        <div class="code"><div class="ln gap"><span class="no">⋮</span><span class="tx"></span></div><div class="ln"><span class="no">10</span><span class="tx"><span class="k">struct</span> buffer *buffer_new(<span class="k">size_t</span> len)</span></div><div class="ln"><span class="no">11</span><span class="tx">{</span></div><div class="ln"><span class="no">12</span><span class="tx">    <span class="k">struct</span> buffer *b = <span class="f">malloc</span>(<span class="k">sizeof</span> *b);</span></div><div class="ln err"><span class="no">13</span><span class="tx">    b-&gt;data = <span class="f">malloc</span>(len);</span></div><div class="callout error"><span class="no"></span><span class="tx">▲ error: dereference of NULL value</span></div><div class="ln"><span class="no">14</span><span class="tx">    b-&gt;len = len;</span></div><div class="ln err"><span class="no">15</span><span class="tx">    <span class="f">memset</span>(b-&gt;data, 0, len);</span></div><div class="callout error"><span class="no"></span><span class="tx">▲ error: dereference of NULL value</span></div><div class="ln"><span class="no">16</span><span class="tx">    <span class="k">return</span> b;</span></div><div class="ln"><span class="no">17</span><span class="tx">}</span></div><div class="ln gap"><span class="no">⋮</span><span class="tx"></span></div><div class="ln noteline"><span class="no">25</span><span class="tx"><span class="k">int</span> main(<span class="k">void</span>)</span></div><div class="ln"><span class="no">26</span><span class="tx">{</span></div><div class="ln noteline"><span class="no">27</span><span class="tx">    <span class="k">struct</span> buffer *b = buffer_new(64);</span></div><div class="ln"><span class="no">28</span><span class="tx">    <span class="k">if</span> (!b)</span></div><div class="ln"><span class="no">29</span><span class="tx">        <span class="k">return</span> 1;</span></div><div class="ln"><span class="no">30</span><span class="tx">    b-&gt;data[0] = <span class="s">&#x27;x&#x27;</span>;</span></div><div class="ln"><span class="no">31</span><span class="tx">    buffer_free(b);</span></div><div class="ln"><span class="no">32</span><span class="tx">    <span class="k">return</span> 0;</span></div><div class="ln"><span class="no">33</span><span class="tx">}</span></div></div>
+      </div>
+      <div class="pane out">
+        <div class="pane-label"><span>$ gcc -fplugin=libsl.so -fplugin-arg-libsl-args=oom oom.c</span><span>0.03 s</span></div>
+        <pre class="term"><span class="loc">oom.c:13:13: </span><span class="error">error:</span> dereference of NULL value
+<span class="loc">oom.c:27:24: </span><span class="note">note:</span> from call of buffer_new()
+<span class="loc">oom.c:25:5: </span><span class="note">note:</span> from call of main()
+<span class="loc">oom.c:13:13: </span><span class="error">error:</span> dereference of NULL value
+<span class="loc">oom.c:27:24: </span><span class="note">note:</span> from call of buffer_new()
+<span class="loc">oom.c:25:5: </span><span class="note">note:</span> from call of main()
+<span class="loc">oom.c:15:5: </span><span class="error">error:</span> dereference of NULL value
+<span class="loc">oom.c:27:24: </span><span class="note">note:</span> from call of buffer_new()
+<span class="loc">oom.c:25:5: </span><span class="note">note:</span> from call of main()</pre>
+      </div>
+      <p class="after">Both allocations can fail. Line 13 writes into a <code>NULL</code>
+<code>b</code>, and the <code>memset</code> on line 15 writes into a <code>NULL</code>
+<code>b-&gt;data</code>. (Predator reaches line 13 along two paths and reports it once for each.)</p>
+      <details>
+        <summary>Whole program <span class="file">33 lines</span></summary>
+        <pre class="full"><code><span class="c">/* predator-args: oom */</span>
+<span class="k">#include</span> &lt;stdlib.h&gt;
+<span class="k">#include</span> &lt;string.h&gt;
+
+<span class="k">struct</span> buffer {
+    <span class="k">char</span> *data;
+    <span class="k">size_t</span> len;
+};
+
+<span class="k">struct</span> buffer *buffer_new(<span class="k">size_t</span> len)
+{
+    <span class="k">struct</span> buffer *b = <span class="f">malloc</span>(<span class="k">sizeof</span> *b);
+    b-&gt;data = <span class="f">malloc</span>(len);
+    b-&gt;len = len;
+    <span class="f">memset</span>(b-&gt;data, 0, len);
+    <span class="k">return</span> b;
+}
+
+<span class="k">void</span> buffer_free(<span class="k">struct</span> buffer *b)
+{
+    <span class="f">free</span>(b-&gt;data);
+    <span class="f">free</span>(b);
+}
+
+<span class="k">int</span> main(<span class="k">void</span>)
+{
+    <span class="k">struct</span> buffer *b = buffer_new(64);
+    <span class="k">if</span> (!b)
+        <span class="k">return</span> 1;
+    b-&gt;data[0] = <span class="s">&#x27;x&#x27;</span>;
+    buffer_free(b);
+    <span class="k">return</span> 0;
+}
+</code></pre>
+      </details>
+    </div>
+    <div class="step">
+      <div class="step-head"><span class="num">2</span><h3>The quick fix: return NULL on failure</h3><span class="verdict bug">bug found · 1 warning</span></div>
+      <div class="pane">
+        <div class="pane-label"><span>cases/oom-half.c</span><span class="legend"><i class="add-key"></i>changed</span></div>
+        <div class="code"><div class="ln gap"><span class="no">⋮</span><span class="tx"></span></div><div class="ln"><span class="no">10</span><span class="tx"><span class="k">struct</span> buffer *buffer_new(<span class="k">size_t</span> len)</span></div><div class="ln"><span class="no">11</span><span class="tx">{</span></div><div class="ln"><span class="no">12</span><span class="tx">    <span class="k">struct</span> buffer *b = <span class="f">malloc</span>(<span class="k">sizeof</span> *b);</span></div><div class="ln add"><span class="no">13</span><span class="tx">    <span class="k">if</span> (!b)</span></div><div class="ln add"><span class="no">14</span><span class="tx">        <span class="k">return</span> <span class="k">NULL</span>;</span></div><div class="ln"><span class="no">15</span><span class="tx">    b-&gt;data = <span class="f">malloc</span>(len);</span></div><div class="ln warn add"><span class="no">16</span><span class="tx">    <span class="k">if</span> (!b-&gt;data)</span></div><div class="callout warning"><span class="no"></span><span class="tx">▲ warning: memory leak detected while destroying a variable on stack</span></div><div class="ln add"><span class="no">17</span><span class="tx">        <span class="k">return</span> <span class="k">NULL</span>;</span></div><div class="ln"><span class="no">18</span><span class="tx">    b-&gt;len = len;</span></div><div class="ln"><span class="no">19</span><span class="tx">    <span class="f">memset</span>(b-&gt;data, 0, len);</span></div><div class="ln"><span class="no">20</span><span class="tx">    <span class="k">return</span> b;</span></div><div class="ln"><span class="no">21</span><span class="tx">}</span></div><div class="ln gap"><span class="no">⋮</span><span class="tx"></span></div><div class="ln noteline"><span class="no">29</span><span class="tx"><span class="k">int</span> main(<span class="k">void</span>)</span></div><div class="ln"><span class="no">30</span><span class="tx">{</span></div><div class="ln noteline"><span class="no">31</span><span class="tx">    <span class="k">struct</span> buffer *b = buffer_new(64);</span></div><div class="ln"><span class="no">32</span><span class="tx">    <span class="k">if</span> (!b)</span></div><div class="ln"><span class="no">33</span><span class="tx">        <span class="k">return</span> 1;</span></div><div class="ln"><span class="no">34</span><span class="tx">    b-&gt;data[0] = <span class="s">&#x27;x&#x27;</span>;</span></div><div class="ln"><span class="no">35</span><span class="tx">    buffer_free(b);</span></div><div class="ln"><span class="no">36</span><span class="tx">    <span class="k">return</span> 0;</span></div><div class="ln"><span class="no">37</span><span class="tx">}</span></div></div>
+      </div>
+      <div class="pane out">
+        <div class="pane-label"><span>$ gcc -fplugin=libsl.so -fplugin-arg-libsl-args=oom oom-half.c</span><span>0.03 s</span></div>
+        <pre class="term"><span class="loc">oom-half.c:16:8: </span><span class="warning">warning:</span> memory leak detected while destroying a variable on stack
+<span class="loc">oom-half.c:31:24: </span><span class="note">note:</span> from call of buffer_new()
+<span class="loc">oom-half.c:29:5: </span><span class="note">note:</span> from call of main()</pre>
+      </div>
+      <p class="after">No more <code>NULL</code> dereferences, but if the second allocation fails,
+the function returns without freeing the first one. Error paths are rarely tested, and Predator
+checks them in the same way as the main path.</p>
+      <details>
+        <summary>Whole program <span class="file">37 lines</span></summary>
+        <pre class="full"><code><span class="c">/* predator-args: oom */</span>
+<span class="k">#include</span> &lt;stdlib.h&gt;
+<span class="k">#include</span> &lt;string.h&gt;
+
+<span class="k">struct</span> buffer {
+    <span class="k">char</span> *data;
+    <span class="k">size_t</span> len;
+};
+
+<span class="k">struct</span> buffer *buffer_new(<span class="k">size_t</span> len)
+{
+    <span class="k">struct</span> buffer *b = <span class="f">malloc</span>(<span class="k">sizeof</span> *b);
+    <span class="k">if</span> (!b)
+        <span class="k">return</span> <span class="k">NULL</span>;
+    b-&gt;data = <span class="f">malloc</span>(len);
+    <span class="k">if</span> (!b-&gt;data)
+        <span class="k">return</span> <span class="k">NULL</span>;
+    b-&gt;len = len;
+    <span class="f">memset</span>(b-&gt;data, 0, len);
+    <span class="k">return</span> b;
+}
+
+<span class="k">void</span> buffer_free(<span class="k">struct</span> buffer *b)
+{
+    <span class="f">free</span>(b-&gt;data);
+    <span class="f">free</span>(b);
+}
+
+<span class="k">int</span> main(<span class="k">void</span>)
+{
+    <span class="k">struct</span> buffer *b = buffer_new(64);
+    <span class="k">if</span> (!b)
+        <span class="k">return</span> 1;
+    b-&gt;data[0] = <span class="s">&#x27;x&#x27;</span>;
+    buffer_free(b);
+    <span class="k">return</span> 0;
+}
+</code></pre>
+      </details>
+    </div>
+    <div class="step">
+      <div class="step-head"><span class="num">3</span><h3>The fix: clean up on the error path</h3><span class="verdict safe">verified · no memory errors</span></div>
+      <div class="pane">
+        <div class="pane-label"><span>cases/oom-fixed.c</span><span class="legend"><i class="add-key"></i>changed</span></div>
+        <div class="code"><div class="ln gap"><span class="no">⋮</span><span class="tx"></span></div><div class="ln"><span class="no">10</span><span class="tx"><span class="k">struct</span> buffer *buffer_new(<span class="k">size_t</span> len)</span></div><div class="ln"><span class="no">11</span><span class="tx">{</span></div><div class="ln"><span class="no">12</span><span class="tx">    <span class="k">struct</span> buffer *b = <span class="f">malloc</span>(<span class="k">sizeof</span> *b);</span></div><div class="ln"><span class="no">13</span><span class="tx">    <span class="k">if</span> (!b)</span></div><div class="ln"><span class="no">14</span><span class="tx">        <span class="k">return</span> <span class="k">NULL</span>;</span></div><div class="ln"><span class="no">15</span><span class="tx">    b-&gt;data = <span class="f">malloc</span>(len);</span></div><div class="ln add"><span class="no">16</span><span class="tx">    <span class="k">if</span> (!b-&gt;data) {</span></div><div class="ln add"><span class="no">17</span><span class="tx">        <span class="f">free</span>(b);</span></div><div class="ln"><span class="no">18</span><span class="tx">        <span class="k">return</span> <span class="k">NULL</span>;</span></div><div class="ln add"><span class="no">19</span><span class="tx">    }</span></div><div class="ln"><span class="no">20</span><span class="tx">    b-&gt;len = len;</span></div><div class="ln"><span class="no">21</span><span class="tx">    <span class="f">memset</span>(b-&gt;data, 0, len);</span></div><div class="ln"><span class="no">22</span><span class="tx">    <span class="k">return</span> b;</span></div><div class="ln"><span class="no">23</span><span class="tx">}</span></div><div class="ln gap"><span class="no">⋮</span><span class="tx"></span></div><div class="ln"><span class="no">31</span><span class="tx"><span class="k">int</span> main(<span class="k">void</span>)</span></div><div class="ln"><span class="no">32</span><span class="tx">{</span></div><div class="ln"><span class="no">33</span><span class="tx">    <span class="k">struct</span> buffer *b = buffer_new(64);</span></div><div class="ln"><span class="no">34</span><span class="tx">    <span class="k">if</span> (!b)</span></div><div class="ln"><span class="no">35</span><span class="tx">        <span class="k">return</span> 1;</span></div><div class="ln"><span class="no">36</span><span class="tx">    b-&gt;data[0] = <span class="s">&#x27;x&#x27;</span>;</span></div><div class="ln"><span class="no">37</span><span class="tx">    buffer_free(b);</span></div><div class="ln"><span class="no">38</span><span class="tx">    <span class="k">return</span> 0;</span></div><div class="ln"><span class="no">39</span><span class="tx">}</span></div></div>
+      </div>
+      <div class="pane out">
+        <div class="pane-label"><span>$ gcc -fplugin=libsl.so -fplugin-arg-libsl-args=oom oom-fixed.c</span><span>0.03 s</span></div>
+        <pre class="term"><span class="quiet">(no diagnostics)</span></pre>
+      </div>
+      <p class="after">Each of the three outcomes (both allocations succeed, the first fails, the
+second fails) is now free of errors and leaks.</p>
+      <details>
+        <summary>Whole program <span class="file">39 lines</span></summary>
+        <pre class="full"><code><span class="c">/* predator-args: oom */</span>
+<span class="k">#include</span> &lt;stdlib.h&gt;
+<span class="k">#include</span> &lt;string.h&gt;
+
+<span class="k">struct</span> buffer {
+    <span class="k">char</span> *data;
+    <span class="k">size_t</span> len;
+};
+
+<span class="k">struct</span> buffer *buffer_new(<span class="k">size_t</span> len)
+{
+    <span class="k">struct</span> buffer *b = <span class="f">malloc</span>(<span class="k">sizeof</span> *b);
+    <span class="k">if</span> (!b)
+        <span class="k">return</span> <span class="k">NULL</span>;
+    b-&gt;data = <span class="f">malloc</span>(len);
+    <span class="k">if</span> (!b-&gt;data) {
+        <span class="f">free</span>(b);
+        <span class="k">return</span> <span class="k">NULL</span>;
+    }
+    b-&gt;len = len;
+    <span class="f">memset</span>(b-&gt;data, 0, len);
+    <span class="k">return</span> b;
+}
+
+<span class="k">void</span> buffer_free(<span class="k">struct</span> buffer *b)
+{
+    <span class="f">free</span>(b-&gt;data);
+    <span class="f">free</span>(b);
+}
+
+<span class="k">int</span> main(<span class="k">void</span>)
+{
+    <span class="k">struct</span> buffer *b = buffer_new(64);
+    <span class="k">if</span> (!b)
+        <span class="k">return</span> 1;
+    b-&gt;data[0] = <span class="s">&#x27;x&#x27;</span>;
+    buffer_free(b);
+    <span class="k">return</span> 0;
+}
+</code></pre>
+      </details>
+    </div>
+  </section>
+
+  <section class="story" id="double-free">
+    <div class="story-head">
+      <span class="cwe">CWE-415</span>
+      <h2><a href="#double-free">Double free on an error path</a></h2>
+    </div>
+    <p class="intro">Ownership bugs come from two functions that disagree about who frees a buffer.
+Here <code>parse()</code> frees the request body when it fails, as its comment says. Its caller
+did not read the comment.</p>
+    
+    <div class="step">
+      <div class="step-head"><span class="num">1</span><h3>Both functions free the body</h3><span class="verdict bug">bug found · 1 error</span></div>
+      <div class="pane">
+        <div class="pane-label"><span>cases/double-free.c</span></div>
+        <div class="code"><div class="ln gap"><span class="no">⋮</span><span class="tx"></span></div><div class="ln"><span class="no">11</span><span class="tx"><span class="c">/* on failure, releases the body and returns -1 */</span></span></div><div class="ln"><span class="no">12</span><span class="tx"><span class="k">int</span> parse(<span class="k">struct</span> request *req)</span></div><div class="ln"><span class="no">13</span><span class="tx">{</span></div><div class="ln"><span class="no">14</span><span class="tx">    <span class="k">if</span> (<span class="f">__VERIFIER_nondet_int</span>()) {</span></div><div class="ln"><span class="no">15</span><span class="tx">        <span class="f">free</span>(req-&gt;body);</span></div><div class="ln"><span class="no">16</span><span class="tx">        <span class="k">return</span> -1;</span></div><div class="ln"><span class="no">17</span><span class="tx">    }</span></div><div class="ln"><span class="no">18</span><span class="tx">    req-&gt;body[0] = <span class="s">&#x27;\0&#x27;</span>;</span></div><div class="ln"><span class="no">19</span><span class="tx">    <span class="k">return</span> 0;</span></div><div class="ln"><span class="no">20</span><span class="tx">}</span></div><div class="ln"><span class="no">21</span><span class="tx"> </span></div><div class="ln"><span class="no">22</span><span class="tx"><span class="k">int</span> handle(<span class="k">void</span>)</span></div><div class="ln"><span class="no">23</span><span class="tx">{</span></div><div class="ln"><span class="no">24</span><span class="tx">    <span class="k">struct</span> request req;</span></div><div class="ln"><span class="no">25</span><span class="tx">    req.len = 128;</span></div><div class="ln"><span class="no">26</span><span class="tx">    req.body = <span class="f">malloc</span>(req.len);</span></div><div class="ln"><span class="no">27</span><span class="tx">    <span class="k">if</span> (!req.body)</span></div><div class="ln"><span class="no">28</span><span class="tx">        <span class="k">return</span> -1;</span></div><div class="ln"><span class="no">29</span><span class="tx"> </span></div><div class="ln"><span class="no">30</span><span class="tx">    <span class="k">int</span> rc = parse(&amp;req);</span></div><div class="ln err"><span class="no">31</span><span class="tx">    <span class="f">free</span>(req.body);</span></div><div class="callout error"><span class="no"></span><span class="tx">▲ error: double free by free()</span></div><div class="ln"><span class="no">32</span><span class="tx">    <span class="k">return</span> rc;</span></div><div class="ln"><span class="no">33</span><span class="tx">}</span></div><div class="ln gap"><span class="no">⋮</span><span class="tx"></span></div></div>
+      </div>
+      <div class="pane out">
+        <div class="pane-label"><span>$ gcc -fplugin=libsl.so double-free.c</span><span>0.03 s</span></div>
+        <pre class="term"><span class="loc">double-free.c:31:5: </span><span class="error">error:</span> double free by free()
+<span class="loc">double-free.c:37:12: </span><span class="note">note:</span> from call of handle()
+<span class="loc">double-free.c:35:5: </span><span class="note">note:</span> from call of main()</pre>
+      </div>
+      <p class="after">On the failure path, line 31 frees memory that <code>parse()</code> has
+already freed. The heap allocator can be corrupted this way, and double frees are often
+exploitable.</p>
+      <details>
+        <summary>Whole program <span class="file">38 lines</span></summary>
+        <pre class="full"><code><span class="k">#include</span> &lt;stdlib.h&gt;
+<span class="k">#include</span> &lt;string.h&gt;
+
+<span class="k">extern</span> <span class="k">int</span> <span class="f">__VERIFIER_nondet_int</span>(<span class="k">void</span>);
+
+<span class="k">struct</span> request {
+    <span class="k">char</span> *body;
+    <span class="k">size_t</span> len;
+};
+
+<span class="c">/* on failure, releases the body and returns -1 */</span>
+<span class="k">int</span> parse(<span class="k">struct</span> request *req)
+{
+    <span class="k">if</span> (<span class="f">__VERIFIER_nondet_int</span>()) {
+        <span class="f">free</span>(req-&gt;body);
+        <span class="k">return</span> -1;
+    }
+    req-&gt;body[0] = <span class="s">&#x27;\0&#x27;</span>;
+    <span class="k">return</span> 0;
+}
+
+<span class="k">int</span> handle(<span class="k">void</span>)
+{
+    <span class="k">struct</span> request req;
+    req.len = 128;
+    req.body = <span class="f">malloc</span>(req.len);
+    <span class="k">if</span> (!req.body)
+        <span class="k">return</span> -1;
+
+    <span class="k">int</span> rc = parse(&amp;req);
+    <span class="f">free</span>(req.body);
+    <span class="k">return</span> rc;
+}
+
+<span class="k">int</span> main(<span class="k">void</span>)
+{
+    <span class="k">return</span> handle() ? 1 : 0;
+}
+</code></pre>
+      </details>
+    </div>
+    <div class="step">
+      <div class="step-head"><span class="num">2</span><h3>The fix: reset the pointer</h3><span class="verdict safe">verified · no memory errors</span></div>
+      <div class="pane">
+        <div class="pane-label"><span>cases/double-free-fixed.c</span><span class="legend"><i class="add-key"></i>changed</span></div>
+        <div class="code"><div class="ln gap"><span class="no">⋮</span><span class="tx"></span></div><div class="ln"><span class="no">11</span><span class="tx"><span class="c">/* on failure, releases the body and returns -1 */</span></span></div><div class="ln"><span class="no">12</span><span class="tx"><span class="k">int</span> parse(<span class="k">struct</span> request *req)</span></div><div class="ln"><span class="no">13</span><span class="tx">{</span></div><div class="ln"><span class="no">14</span><span class="tx">    <span class="k">if</span> (<span class="f">__VERIFIER_nondet_int</span>()) {</span></div><div class="ln"><span class="no">15</span><span class="tx">        <span class="f">free</span>(req-&gt;body);</span></div><div class="ln add"><span class="no">16</span><span class="tx">        req-&gt;body = <span class="k">NULL</span>;</span></div><div class="ln"><span class="no">17</span><span class="tx">        <span class="k">return</span> -1;</span></div><div class="ln"><span class="no">18</span><span class="tx">    }</span></div><div class="ln"><span class="no">19</span><span class="tx">    req-&gt;body[0] = <span class="s">&#x27;\0&#x27;</span>;</span></div><div class="ln"><span class="no">20</span><span class="tx">    <span class="k">return</span> 0;</span></div><div class="ln"><span class="no">21</span><span class="tx">}</span></div><div class="ln"><span class="no">22</span><span class="tx"> </span></div><div class="ln"><span class="no">23</span><span class="tx"><span class="k">int</span> handle(<span class="k">void</span>)</span></div><div class="ln"><span class="no">24</span><span class="tx">{</span></div><div class="ln"><span class="no">25</span><span class="tx">    <span class="k">struct</span> request req;</span></div><div class="ln"><span class="no">26</span><span class="tx">    req.len = 128;</span></div><div class="ln"><span class="no">27</span><span class="tx">    req.body = <span class="f">malloc</span>(req.len);</span></div><div class="ln"><span class="no">28</span><span class="tx">    <span class="k">if</span> (!req.body)</span></div><div class="ln"><span class="no">29</span><span class="tx">        <span class="k">return</span> -1;</span></div><div class="ln"><span class="no">30</span><span class="tx"> </span></div><div class="ln"><span class="no">31</span><span class="tx">    <span class="k">int</span> rc = parse(&amp;req);</span></div><div class="ln"><span class="no">32</span><span class="tx">    <span class="f">free</span>(req.body);</span></div><div class="ln"><span class="no">33</span><span class="tx">    <span class="k">return</span> rc;</span></div><div class="ln"><span class="no">34</span><span class="tx">}</span></div><div class="ln gap"><span class="no">⋮</span><span class="tx"></span></div></div>
+      </div>
+      <div class="pane out">
+        <div class="pane-label"><span>$ gcc -fplugin=libsl.so double-free-fixed.c</span><span>0.03 s</span></div>
+        <pre class="term"><span class="quiet">(no diagnostics)</span></pre>
+      </div>
+      <p class="after">After <code>free(req-&gt;body)</code>, <code>parse()</code> stores
+<code>NULL</code>, and <code>free(NULL)</code> does nothing. Predator verifies both paths.</p>
+      <details>
+        <summary>Whole program <span class="file">39 lines</span></summary>
+        <pre class="full"><code><span class="k">#include</span> &lt;stdlib.h&gt;
+<span class="k">#include</span> &lt;string.h&gt;
+
+<span class="k">extern</span> <span class="k">int</span> <span class="f">__VERIFIER_nondet_int</span>(<span class="k">void</span>);
+
+<span class="k">struct</span> request {
+    <span class="k">char</span> *body;
+    <span class="k">size_t</span> len;
+};
+
+<span class="c">/* on failure, releases the body and returns -1 */</span>
+<span class="k">int</span> parse(<span class="k">struct</span> request *req)
+{
+    <span class="k">if</span> (<span class="f">__VERIFIER_nondet_int</span>()) {
+        <span class="f">free</span>(req-&gt;body);
+        req-&gt;body = <span class="k">NULL</span>;
+        <span class="k">return</span> -1;
+    }
+    req-&gt;body[0] = <span class="s">&#x27;\0&#x27;</span>;
+    <span class="k">return</span> 0;
+}
+
+<span class="k">int</span> handle(<span class="k">void</span>)
+{
+    <span class="k">struct</span> request req;
+    req.len = 128;
+    req.body = <span class="f">malloc</span>(req.len);
+    <span class="k">if</span> (!req.body)
+        <span class="k">return</span> -1;
+
+    <span class="k">int</span> rc = parse(&amp;req);
+    <span class="f">free</span>(req.body);
+    <span class="k">return</span> rc;
+}
+
+<span class="k">int</span> main(<span class="k">void</span>)
+{
+    <span class="k">return</span> handle() ? 1 : 0;
+}
+</code></pre>
+      </details>
+    </div>
+  </section>
+
+  <section class="story" id="kernel-list">
+    <div class="story-head">
+      <span class="cwe">CWE-416</span>
+      <h2><a href="#kernel-list">Freeing while iterating a Linux kernel list</a></h2>
+    </div>
+    <p class="intro">System code does not use textbook lists. The Linux kernel embeds a
+<code>struct list_head</code> <em>inside</em> each object, links the heads into a cyclic doubly linked
+list, and gets from a head back to its object with <code>container_of</code>, that is, by subtracting
+the offset of the member from the pointer. Predator was designed for such code: it handles pointer
+arithmetic, pointers into the middle of blocks and lists that are linked through embedded
+structures.</p>
+    
+    <div class="step">
+      <div class="step-head"><span class="num">1</span><h3>Deleting inside list_for_each_entry</h3><span class="verdict bug">bug found · 1 error</span></div>
+      <div class="pane">
+        <div class="pane-label"><span>cases/kernel-list.c</span></div>
+        <div class="code"><div class="ln gap"><span class="no">⋮</span><span class="tx"></span></div><div class="ln"><span class="no">18</span><span class="tx"><span class="k">#define</span> list_for_each_entry(pos, head, member)                          \</span></div><div class="ln"><span class="no">19</span><span class="tx">    <span class="k">for</span> (pos = list_entry((head)-&gt;next, <span class="k">typeof</span>(*pos), member);          \</span></div><div class="ln"><span class="no">20</span><span class="tx">         &amp;pos-&gt;member != (head);                                        \</span></div><div class="ln"><span class="no">21</span><span class="tx">         pos = list_entry(pos-&gt;member.next, <span class="k">typeof</span>(*pos), member))</span></div><div class="ln gap"><span class="no">⋮</span><span class="tx"></span></div><div class="ln"><span class="no">45</span><span class="tx"><span class="k">static</span> LIST_HEAD(devices);</span></div><div class="ln"><span class="no">46</span><span class="tx"> </span></div><div class="ln"><span class="no">47</span><span class="tx"><span class="k">int</span> main(<span class="k">void</span>)</span></div><div class="ln"><span class="no">48</span><span class="tx">{</span></div><div class="ln"><span class="no">49</span><span class="tx">    <span class="k">while</span> (<span class="f">__VERIFIER_nondet_int</span>()) {</span></div><div class="ln"><span class="no">50</span><span class="tx">        <span class="k">struct</span> device *dev = <span class="f">malloc</span>(<span class="k">sizeof</span> *dev);</span></div><div class="ln"><span class="no">51</span><span class="tx">        <span class="k">if</span> (!dev)</span></div><div class="ln"><span class="no">52</span><span class="tx">            <span class="f">abort</span>();</span></div><div class="ln"><span class="no">53</span><span class="tx">        dev-&gt;id = 0;</span></div><div class="ln"><span class="no">54</span><span class="tx">        list_add(&amp;dev-&gt;link, &amp;devices);</span></div><div class="ln"><span class="no">55</span><span class="tx">    }</span></div><div class="ln"><span class="no">56</span><span class="tx"> </span></div><div class="ln"><span class="no">57</span><span class="tx">    <span class="k">struct</span> device *dev;</span></div><div class="ln err"><span class="no">58</span><span class="tx">    list_for_each_entry(dev, &amp;devices, link) {</span></div><div class="callout error"><span class="no"></span><span class="tx">▲ error: dereference of already deleted heap object</span></div><div class="ln"><span class="no">59</span><span class="tx">        list_del(&amp;dev-&gt;link);</span></div><div class="ln"><span class="no">60</span><span class="tx">        <span class="f">free</span>(dev);</span></div><div class="ln"><span class="no">61</span><span class="tx">    }</span></div><div class="ln"><span class="no">62</span><span class="tx">    <span class="k">return</span> 0;</span></div><div class="ln"><span class="no">63</span><span class="tx">}</span></div></div>
+      </div>
+      <div class="pane out">
+        <div class="pane-label"><span>$ gcc -fplugin=libsl.so kernel-list.c</span><span>0.03 s</span></div>
+        <pre class="term"><span class="loc">kernel-list.c:58:5: </span><span class="error">error:</span> dereference of already deleted heap object</pre>
+      </div>
+      <p class="after">The loop body frees <code>dev</code>, and then the macro computes the
+next entry from <code>dev-&gt;link.next</code>, a field of the freed block. This is why the kernel
+has <code>list_for_each_entry_safe</code>, and why reviewers keep asking for it.</p>
+      <details>
+        <summary>Whole program <span class="file">63 lines</span></summary>
+        <pre class="full"><code><span class="k">#include</span> &lt;stdlib.h&gt;
+<span class="k">#include</span> &lt;stddef.h&gt;
+
+<span class="k">extern</span> <span class="k">int</span> <span class="f">__VERIFIER_nondet_int</span>(<span class="k">void</span>);
+
+<span class="c">/* a minimal copy of &lt;linux/list.h&gt; */</span>
+<span class="k">struct</span> list_head {
+    <span class="k">struct</span> list_head *next, *prev;
+};
+
+<span class="k">#define</span> LIST_HEAD(name) <span class="k">struct</span> list_head name = { &amp;(name), &amp;(name) }
+
+<span class="k">#define</span> container_of(ptr, type, member) \
+    ((type *)((<span class="k">char</span> *)(ptr) - offsetof(type, member)))
+
+<span class="k">#define</span> list_entry(ptr, type, member) container_of(ptr, type, member)
+
+<span class="k">#define</span> list_for_each_entry(pos, head, member)                          \
+    <span class="k">for</span> (pos = list_entry((head)-&gt;next, <span class="k">typeof</span>(*pos), member);          \
+         &amp;pos-&gt;member != (head);                                        \
+         pos = list_entry(pos-&gt;member.next, <span class="k">typeof</span>(*pos), member))
+
+<span class="k">static</span> <span class="k">void</span> list_add(<span class="k">struct</span> list_head *new, <span class="k">struct</span> list_head *head)
+{
+    <span class="k">struct</span> list_head *next = head-&gt;next;
+    next-&gt;prev = new;
+    new-&gt;next = next;
+    new-&gt;prev = head;
+    head-&gt;next = new;
+}
+
+<span class="k">static</span> <span class="k">void</span> list_del(<span class="k">struct</span> list_head *entry)
+{
+    entry-&gt;next-&gt;prev = entry-&gt;prev;
+    entry-&gt;prev-&gt;next = entry-&gt;next;
+}
+
+<span class="c">/* the payload sits around the list_head, not at its start */</span>
+<span class="k">struct</span> device {
+    <span class="k">int</span> id;
+    <span class="k">struct</span> list_head link;
+    <span class="k">char</span> name[16];
+};
+
+<span class="k">static</span> LIST_HEAD(devices);
+
+<span class="k">int</span> main(<span class="k">void</span>)
+{
+    <span class="k">while</span> (<span class="f">__VERIFIER_nondet_int</span>()) {
+        <span class="k">struct</span> device *dev = <span class="f">malloc</span>(<span class="k">sizeof</span> *dev);
+        <span class="k">if</span> (!dev)
+            <span class="f">abort</span>();
+        dev-&gt;id = 0;
+        list_add(&amp;dev-&gt;link, &amp;devices);
+    }
+
+    <span class="k">struct</span> device *dev;
+    list_for_each_entry(dev, &amp;devices, link) {
+        list_del(&amp;dev-&gt;link);
+        <span class="f">free</span>(dev);
+    }
+    <span class="k">return</span> 0;
+}
+</code></pre>
+      </details>
+    </div>
+    <div class="step">
+      <div class="step-head"><span class="num">2</span><h3>The fix: the _safe iterator</h3><span class="verdict safe">verified · no memory errors</span></div>
+      <div class="pane">
+        <div class="pane-label"><span>cases/kernel-list-fixed.c</span><span class="legend"><i class="add-key"></i>changed</span></div>
+        <div class="code"><div class="ln gap"><span class="no">⋮</span><span class="tx"></span></div><div class="ln"><span class="no">18</span><span class="tx"><span class="k">#define</span> list_for_each_entry(pos, head, member)                          \</span></div><div class="ln"><span class="no">19</span><span class="tx">    <span class="k">for</span> (pos = list_entry((head)-&gt;next, <span class="k">typeof</span>(*pos), member);          \</span></div><div class="ln"><span class="no">20</span><span class="tx">         &amp;pos-&gt;member != (head);                                        \</span></div><div class="ln"><span class="no">21</span><span class="tx">         pos = list_entry(pos-&gt;member.next, <span class="k">typeof</span>(*pos), member))</span></div><div class="ln add"><span class="no">22</span><span class="tx"> </span></div><div class="ln add"><span class="no">23</span><span class="tx"><span class="k">#define</span> list_for_each_entry_safe(pos, n, head, member)                  \</span></div><div class="ln add"><span class="no">24</span><span class="tx">    <span class="k">for</span> (pos = list_entry((head)-&gt;next, <span class="k">typeof</span>(*pos), member),          \</span></div><div class="ln add"><span class="no">25</span><span class="tx">         n = list_entry(pos-&gt;member.next, <span class="k">typeof</span>(*pos), member);        \</span></div><div class="ln add"><span class="no">26</span><span class="tx">         &amp;pos-&gt;member != (head);                                        \</span></div><div class="ln add"><span class="no">27</span><span class="tx">         pos = n, n = list_entry(n-&gt;member.next, <span class="k">typeof</span>(*n), member))</span></div><div class="ln gap"><span class="no">⋮</span><span class="tx"></span></div><div class="ln"><span class="no">51</span><span class="tx"><span class="k">static</span> LIST_HEAD(devices);</span></div><div class="ln"><span class="no">52</span><span class="tx"> </span></div><div class="ln"><span class="no">53</span><span class="tx"><span class="k">int</span> main(<span class="k">void</span>)</span></div><div class="ln"><span class="no">54</span><span class="tx">{</span></div><div class="ln"><span class="no">55</span><span class="tx">    <span class="k">while</span> (<span class="f">__VERIFIER_nondet_int</span>()) {</span></div><div class="ln"><span class="no">56</span><span class="tx">        <span class="k">struct</span> device *dev = <span class="f">malloc</span>(<span class="k">sizeof</span> *dev);</span></div><div class="ln"><span class="no">57</span><span class="tx">        <span class="k">if</span> (!dev)</span></div><div class="ln"><span class="no">58</span><span class="tx">            <span class="f">abort</span>();</span></div><div class="ln"><span class="no">59</span><span class="tx">        dev-&gt;id = 0;</span></div><div class="ln"><span class="no">60</span><span class="tx">        list_add(&amp;dev-&gt;link, &amp;devices);</span></div><div class="ln"><span class="no">61</span><span class="tx">    }</span></div><div class="ln"><span class="no">62</span><span class="tx"> </span></div><div class="ln add"><span class="no">63</span><span class="tx">    <span class="k">struct</span> device *dev, *tmp;</span></div><div class="ln add"><span class="no">64</span><span class="tx">    list_for_each_entry_safe(dev, tmp, &amp;devices, link) {</span></div><div class="ln"><span class="no">65</span><span class="tx">        list_del(&amp;dev-&gt;link);</span></div><div class="ln"><span class="no">66</span><span class="tx">        <span class="f">free</span>(dev);</span></div><div class="ln"><span class="no">67</span><span class="tx">    }</span></div><div class="ln"><span class="no">68</span><span class="tx">    <span class="k">return</span> 0;</span></div><div class="ln"><span class="no">69</span><span class="tx">}</span></div></div>
+      </div>
+      <div class="pane out">
+        <div class="pane-label"><span>$ gcc -fplugin=libsl.so kernel-list-fixed.c</span><span>0.03 s</span></div>
+        <pre class="term"><span class="quiet">(no diagnostics)</span></pre>
+      </div>
+      <p class="after"><code>list_for_each_entry_safe</code> reads the next entry before the body
+runs. Predator verifies the whole program: cyclic list, <code>container_of</code> arithmetic and
+all, for any number of devices.</p>
+      <details>
+        <summary>Whole program <span class="file">69 lines</span></summary>
+        <pre class="full"><code><span class="k">#include</span> &lt;stdlib.h&gt;
+<span class="k">#include</span> &lt;stddef.h&gt;
+
+<span class="k">extern</span> <span class="k">int</span> <span class="f">__VERIFIER_nondet_int</span>(<span class="k">void</span>);
+
+<span class="c">/* a minimal copy of &lt;linux/list.h&gt; */</span>
+<span class="k">struct</span> list_head {
+    <span class="k">struct</span> list_head *next, *prev;
+};
+
+<span class="k">#define</span> LIST_HEAD(name) <span class="k">struct</span> list_head name = { &amp;(name), &amp;(name) }
+
+<span class="k">#define</span> container_of(ptr, type, member) \
+    ((type *)((<span class="k">char</span> *)(ptr) - offsetof(type, member)))
+
+<span class="k">#define</span> list_entry(ptr, type, member) container_of(ptr, type, member)
+
+<span class="k">#define</span> list_for_each_entry(pos, head, member)                          \
+    <span class="k">for</span> (pos = list_entry((head)-&gt;next, <span class="k">typeof</span>(*pos), member);          \
+         &amp;pos-&gt;member != (head);                                        \
+         pos = list_entry(pos-&gt;member.next, <span class="k">typeof</span>(*pos), member))
+
+<span class="k">#define</span> list_for_each_entry_safe(pos, n, head, member)                  \
+    <span class="k">for</span> (pos = list_entry((head)-&gt;next, <span class="k">typeof</span>(*pos), member),          \
+         n = list_entry(pos-&gt;member.next, <span class="k">typeof</span>(*pos), member);        \
+         &amp;pos-&gt;member != (head);                                        \
+         pos = n, n = list_entry(n-&gt;member.next, <span class="k">typeof</span>(*n), member))
+
+<span class="k">static</span> <span class="k">void</span> list_add(<span class="k">struct</span> list_head *new, <span class="k">struct</span> list_head *head)
+{
+    <span class="k">struct</span> list_head *next = head-&gt;next;
+    next-&gt;prev = new;
+    new-&gt;next = next;
+    new-&gt;prev = head;
+    head-&gt;next = new;
+}
+
+<span class="k">static</span> <span class="k">void</span> list_del(<span class="k">struct</span> list_head *entry)
+{
+    entry-&gt;next-&gt;prev = entry-&gt;prev;
+    entry-&gt;prev-&gt;next = entry-&gt;next;
+}
+
+<span class="c">/* the payload sits around the list_head, not at its start */</span>
+<span class="k">struct</span> device {
+    <span class="k">int</span> id;
+    <span class="k">struct</span> list_head link;
+    <span class="k">char</span> name[16];
+};
+
+<span class="k">static</span> LIST_HEAD(devices);
+
+<span class="k">int</span> main(<span class="k">void</span>)
+{
+    <span class="k">while</span> (<span class="f">__VERIFIER_nondet_int</span>()) {
+        <span class="k">struct</span> device *dev = <span class="f">malloc</span>(<span class="k">sizeof</span> *dev);
+        <span class="k">if</span> (!dev)
+            <span class="f">abort</span>();
+        dev-&gt;id = 0;
+        list_add(&amp;dev-&gt;link, &amp;devices);
+    }
+
+    <span class="k">struct</span> device *dev, *tmp;
+    list_for_each_entry_safe(dev, tmp, &amp;devices, link) {
+        list_del(&amp;dev-&gt;link);
+        <span class="f">free</span>(dev);
+    }
+    <span class="k">return</span> 0;
+}
+</code></pre>
+      </details>
+    </div>
+  </section>
+  <section class="outro">
+    <h2>Why not just run Valgrind or AddressSanitizer?</h2>
+    <p>Dynamic checkers are excellent, but they see only the executions you run. All of the bugs
+    above need a particular path: a list of the right length, a <code>malloc</code> that fails, a parser that
+    gives up. If no test takes that path, the bug survives. Predator checks every path symbolically, so when
+    it reports no errors, the fix is correct for all inputs, not only for the ones in the test suite.</p>
+    <p>The price is scope. Predator analyses whole sequential programs, and its abstraction is built for
+    linked data structures: singly, doubly and cyclic lists, lists of lists, and lists embedded in other
+    structures. Its precision is byte-level: block sizes, field offsets, pointer arithmetic, <code>memset</code>
+    and <code>memcpy</code>, address alignment. Predator and its successor PredatorHP have won several medals
+    in the memory-safety categories of <a href="https://sv-comp.sosy-lab.org/">SV-COMP</a>.</p>
+    <p>Want to try it on your own code? Build it from <a href="https://github.com/kdudka/predator">kdudka/predator</a>
+    (<code>./switch-host-gcc.sh /usr/bin/gcc</code>), then run
+    <code>gcc -fplugin=sl_build/libsl.so -S -o /dev/null file.c</code>. More details are on the
+    <a href="https://www.fit.vut.cz/research/group/verifit/public/tools/predator/">project page</a> and in the paper
+    <a href="https://doi.org/10.1007/978-3-642-38856-9_13">Byte-Precise Verification of Low-Level List
+    Manipulation</a> (SAS 2013). All programs from this page are in
+    <a href="https://github.com/ondrik/predator-demo/tree/master/cases">cases/</a>.</p>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">Results from Predator 15eb53c6 2026-10-01 built against GCC 13.3.0, with default options
+  (plus <code>oom</code> where shown). Source of this page: <a href="https://github.com/ondrik/predator-demo">ondrik/predator-demo</a>.</div>
+</footer>
+</body>
+</html>
