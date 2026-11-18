@@ -40,6 +40,7 @@
       <label title="every malloc() may return NULL"><input type="checkbox" data-arg="oom"> malloc can fail <code>oom</code></label>
       <label title="report the use of uninitialised values"><input type="checkbox" data-arg="track_uninit"> uninitialised values <code>track_uninit</code></label>
       <label title="report memory leaks also when exit() is called"><input type="checkbox" data-arg="exit_leaks"> leaks at exit <code>exit_leaks</code></label>
+      <label title="draw the heap of each state in which Predator reports an error or a warning"><input type="checkbox" data-arg="plot_errors" data-sticky checked> heap graphs <code>plot_errors</code></label>
     </div>
     <div class="actions">
       <button id="share" class="ghost" type="button">Copy link</button>
@@ -58,6 +59,27 @@
       <pre class="term" id="output">Press “Run Predator”. Locations in the output are clickable.</pre>
     </div>
   </div>
+
+  <section class="pane heaps" id="heaps" hidden tabindex="-1" aria-label="Heap graphs">
+    <div class="pane-label"><span>program states</span><span id="heap-count"></span></div>
+    <div class="heap-bar">
+      <button id="heap-prev" class="ghost icon" type="button" aria-label="previous graph">◀</button>
+      <input id="heap-step" type="range" min="1" max="1" value="1" aria-label="graph">
+      <button id="heap-next" class="ghost icon" type="button" aria-label="next graph">▶</button>
+      <span id="heap-pos" class="heap-pos"></span>
+      <span class="heap-tools">
+        <label id="heap-simplify-wrap" title="hide the stack slots of unnamed temporaries and Forester's own slots"><input id="heap-simplify" type="checkbox" checked> hide unnamed slots</label>
+        <button id="heap-fit" class="ghost small" type="button">Actual size</button>
+        <a id="heap-download" class="small" href="#">.dot</a>
+      </span>
+    </div>
+    <p id="heap-caption" class="heap-caption"></p>
+    <div class="heap-view"><div id="heap-svg"></div></div>
+    <p class="heap-legend">Predator's symbolic heap at that point, drawn by Predator. Boxes in dashed clusters are memory
+    blocks with their fields; <b style="color:#d01c1c">red</b> clusters are list segments that stand for lists of
+    any length (<i>SLS</i>: singly linked, <i>DLS</i>: doubly linked, with the minimal length, e.g. <i>1+</i>);
+    ellipses are pointer values. To see the heap at any line, declare <code>void __VERIFIER_plot(const char *, ...);</code> and call <code>__VERIFIER_plot("name");</code> there.</p>
+  </section>
 
   <section class="notes">
     <h2>Good to know</h2>
@@ -84,6 +106,7 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/clike/clike.min.js"></script>
+<script src="heapview.js"></script>
 <script src="playground.js"></script>
 </body>
 </html>

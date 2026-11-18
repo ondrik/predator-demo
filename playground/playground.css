@@ -76,3 +76,31 @@ button:focus-visible, .field select:focus-visible, .field input:focus-visible { 
   .field select { max-width: 100%; }
 }
 .bar .wrap { max-width: 1280px; }
+
+/* heap graphs (heapview.js) */
+.heaps { margin-top: 12px; }
+.heaps[hidden] { display: none; }
+.heap-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 10px; padding: 12px 14px 0; }
+#heap-step { flex: 1 1 160px; min-width: 120px; accent-color: var(--accent); }
+.heap-pos { font: 13px "IBM Plex Mono", monospace; color: var(--muted); min-width: 64px; }
+.heap-tools { display: inline-flex; align-items: center; gap: 12px; margin-left: auto; font-size: 14px; }
+.heap-tools label { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+.heap-tools label[hidden] { display: none; }
+button.icon, button.small { padding: 3px 10px; font-size: 13px; }
+button:disabled { opacity: 0.35; cursor: default; }
+.heap-caption { margin: 10px 14px; font-size: 15px; overflow-wrap: anywhere; }
+.heap-kind {
+  font: 500 12px "IBM Plex Mono", monospace; text-transform: uppercase; letter-spacing: 0.04em;
+  padding: 1px 6px; border-radius: 4px; color: var(--accent); background: var(--code-bg);
+}
+.heap-kind.error { color: var(--bug); background: var(--bug-bg); }
+.heap-kind.warning { color: var(--warn); background: var(--warn-bg); }
+/* Graphviz draws for white paper, in both themes */
+.heap-view {
+  margin: 0 14px 12px; background: #fff; border: 1px solid var(--line); border-radius: 6px;
+  overflow: auto; max-height: 75vh; padding: 10px;
+}
+#heap-svg svg { display: block; margin: 0 auto; }
+.heap-msg { color: #5b5e66; margin: 16px; }
+.heap-legend { margin: 0 14px 14px; font-size: 14px; color: var(--muted); max-width: 900px; }
+.cm-line-state { background: color-mix(in srgb, var(--accent) 18%, transparent); }

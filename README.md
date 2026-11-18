@@ -36,7 +36,10 @@ WebAssembly with Emscripten (`playground/predator.wasm`, about 27 MB) and run in
 wasm/driver.cc         clang -> -lowerswitch -global-vars -nestedgep -> Predator, in one process
 wasm/build.sh          builds everything:  wasm/build.sh WORK_DIR   (LLVM takes a few hours)
 wasm/test.mjs          checks the wasm build against cases/results.json:  node wasm/test.mjs
+wasm/patches/          plot-errors.patch: a run-time option plot_errors (-args=plot_errors) that writes
+                       the heap of each state with an error or a warning to a .dot file
 playground/template.html, playground.js, playground.css, worker.js
+playground/heapview.js shows the heap graphs of a run (plot_errors, __VERIFIER_plot), drawn with viz.js
 ```
 
 `build.py` also renders `playground/index.html` and `playground/examples.json`.

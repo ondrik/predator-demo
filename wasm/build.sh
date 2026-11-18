@@ -47,6 +47,7 @@ fi
 if [ ! -d predator ]; then
     git clone -q "$PREDATOR_REPO" predator
     git -C predator checkout -q "$PREDATOR_REV"
+    for p in "$ROOT"/wasm/patches/*.patch; do git -C predator apply "$p"; done
 fi
 SHA1="$(git -C predator rev-parse HEAD)"
 echo "#define CL_GIT_SHA1 \"$SHA1\"" > predator/cl/version_cl.h

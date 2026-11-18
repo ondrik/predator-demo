@@ -1,0 +1,64 @@
+Add a run-time option plot_errors (-args=plot_errors) that writes the heap of each state in which
+an error or a warning is reported to error-state-NNNN.dot or warning-state-NNNN.dot.  (Predator can
+plot error states only when built with SE_PLOT_ERROR_STATES.)  The playground uses it to show the
+heap at each reported bug.
+
+diff --git a/sl/glconf.cc b/sl/glconf.cc
+index db077f89..92a2eb36 100644
+--- a/sl/glconf.cc
++++ b/sl/glconf.cc
+@@ -41,6 +41,7 @@ Options::Options():
+     oomSimulation(false),
+     memLeakIsError(false),
+     skipUserPlots(false),
++    plotErrors(false),
+     errorRecoveryMode(SE_ERROR_RECOVERY_MODE),
+     verifierErrorIsError(false),
+     allowCyclicTraceGraph(SE_ALLOW_CYCLIC_TRACE_GRAPH),
+@@ -213,6 +214,12 @@ void handleNoPlot(const string &name, const string &value)
+     data.skipUserPlots = true;
+ }
+ 
++void handlePlotErrors(const string &name, const string &value)
++{
++    assumeNoValue(name, value);
++    data.plotErrors = true;
++}
++
+ void handleOOM(const string &name, const string &value)
+ {
+     assumeNoValue(name, value);
+@@ -257,6 +264,7 @@ ConfigStringParser::ConfigStringParser()
+     tbl_["no_error_recovery"]       = handleNoErrorRecovery;
+     tbl_["no_plot"]                 = handleNoPlot;
+     tbl_["oom"]                     = handleOOM;
++    tbl_["plot_errors"]             = handlePlotErrors;
+     tbl_["state_live_ordering"]     = handleStateLiveOrdering;
+     tbl_["track_uninit"]            = handleTrackUninit;
+     tbl_["verifier_error_is_error"] = handleVerifierErrorIsError;
+diff --git a/sl/glconf.hh b/sl/glconf.hh
+index 7dfac544..ea16f9f8 100644
+--- a/sl/glconf.hh
++++ b/sl/glconf.hh
+@@ -35,6 +35,7 @@ struct Options {
+     bool oomSimulation;     ///< enable/disable @b oom @b simulation mode
+     bool memLeakIsError;    ///< treat memory leak as an error
+     bool skipUserPlots;     ///< ignore all ___sl_plot*() calls
++    bool plotErrors;        ///< plot the heap of each state with an error
+     int errorRecoveryMode;  ///< @copydoc config.h::SE_ERROR_RECOVERY_MODE
+     bool verifierErrorIsError; ///< treat reaching __VERIFIER_error() as error
+     std::string errLabel;   ///< if not empty, treat reaching the label as error
+diff --git a/sl/symproc.cc b/sl/symproc.cc
+index 84bb49e1..0a887844 100644
+--- a/sl/symproc.cc
++++ b/sl/symproc.cc
+@@ -81,6 +81,9 @@ void SymProc::printBackTrace(EMsgLevel level, bool forcePtrace)
+     glProxy->insert(sh_.traceNode(), "symtrace");
+ #endif
+ 
++    if (GlConf::data.plotErrors)
++        plotHeap(sh_, (ML_ERROR == level) ? "error-state" : "warning-state", lw_);
++
+     if (ML_ERROR != level)
+         // do not panic for now
+         return;

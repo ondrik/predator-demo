@@ -1,7 +1,7 @@
 // Runs Predator (predator.js/.wasm, built by wasm/build.sh) off the main thread.
 // Messages in:  {type: "load"} | {type: "run", file, code, args}
 // Messages out: {type: "progress", loaded, total} | {type: "ready"} |
-//               {type: "done", lines, status, ms} | {type: "failed", error}
+//               {type: "done", lines, status, ms, graphs} | {type: "failed", error}
 importScripts("predator.js");
 
 let loading = null;
@@ -35,7 +35,7 @@ async function run({ file, code, args }) {
   postMessage({ type: "ready" });
   const lines = [];
   // a fresh instance per run: Predator keeps global state between analyses
-  const predator = await createPredator({
+  const mod = await createPredator({
     instantiateWasm(imports, done) {
       WebAssembly.instantiate(module, imports).then((inst) => done(inst, module));
       return {};
@@ -43,18 +43,23 @@ async function run({ file, code, args }) {
     print: (t) => lines.push(t),
     printErr: (t) => lines.push(t),
   });
-  predator.FS.mkdirTree("/work");
-  predator.FS.writeFile(`/work/${file}`, code);
-  predator.FS.chdir("/work");
+  mod.FS.mkdirTree("/work");
+  mod.FS.writeFile(`/work/${file}`, code);
+  mod.FS.chdir("/work");
   const start = performance.now();
   let status;
   try {
-    status = predator.callMain([file, ...args]);
+    status = mod.callMain([file, ...args]);
   } catch (e) {
     if (e && e.name === "ExitStatus") status = e.status;
     else { lines.push(`internal error: ${e && e.message ? e.message : e}`); status = 99; }
   }
-  return { lines, status, ms: performance.now() - start };
+  const ms = performance.now() - start;
+  // heap graphs written during the run (__VERIFIER_plot, plot_errors, print-trace)
+  const graphs = {};
+  const dots = mod.FS.readdir("/work").filter((f) => f.endsWith(".dot")).slice(0, 2000);
+  for (const f of dots) graphs[f] = mod.FS.readFile(`/work/${f}`, { encoding: "utf8" });
+  return { lines, status, ms, graphs };
 }
 
 onmessage = async (e) => {

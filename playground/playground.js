@@ -118,8 +118,12 @@ function getArgs() {
   const args = [...document.querySelectorAll("[data-arg]")].filter((c) => c.checked).map((c) => c.dataset.arg);
   return args;
 }
-function setArgs(args) {
-  for (const c of document.querySelectorAll("[data-arg]")) c.checked = args.includes(c.dataset.arg);
+// examples set the options they need, but leave the "sticky" ones (heap graphs) as they are;
+// a shared link sets all of them
+function setArgs(args, all) {
+  for (const c of document.querySelectorAll("[data-arg]")) {
+    if (all || !c.hasAttribute("data-sticky")) c.checked = args.includes(c.dataset.arg);
+  }
   updateLabels();
 }
 function safeName() {
@@ -185,7 +189,7 @@ async function fromHash() {
     try {
       editor.setValue(await unpack(params.get("code")));
       $("filename").value = params.get("file") || "program.c";
-      setArgs((params.get("args") || "").split(",").filter(Boolean));
+      setArgs((params.get("args") || "").split(",").filter(Boolean), true);
       return;
     } catch { /* fall through to the default program */ }
   }
@@ -232,6 +236,7 @@ function run() {
   if (!worker) newWorker();
   running = true;
   clearMarks();
+  HeapView.clear();
   runBtn.textContent = "Stop";
   runBtn.classList.add("stop");
   updateLabels();
@@ -270,7 +275,7 @@ function handle(msg) {
     ready = true;
     finish();
     $("timer").textContent = `${(msg.ms / 1000).toFixed(2)} s`;
-    showResult(msg.lines, msg.status);
+    showResult(msg.lines, msg.status, msg.graphs || {});
   } else if (msg.type === "failed") {
     finish();
     showFailure(msg.error);
@@ -293,8 +298,8 @@ function cleanLines(lines) {
     .filter((l) => l && !l.includes("[internal location]"));
 }
 
-function showResult(rawLines, status) {
-  const lines = cleanLines(rawLines);
+function showResult(rawLines, status, graphs) {
+  const { lines, states } = HeapView.extract(cleanLines(rawLines));
   const out = $("output");
   out.textContent = "";
   let errors = 0, warnings = 0;
@@ -333,6 +338,7 @@ function showResult(rawLines, status) {
     }
     out.appendChild(row);
   }
+  HeapView.show(states, graphs);
   if (status === 3) {
     setVerdict("bug", "does not compile");
   } else if (status !== 0) {
@@ -349,6 +355,7 @@ function showResult(rawLines, status) {
 }
 
 runBtn.addEventListener("click", run);
+HeapView.init({ editor });
 
 (async () => {
   await loadExamples();
