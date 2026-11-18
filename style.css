@@ -82,6 +82,14 @@ p code, li code { background: var(--code-bg); padding: 0.05em 0.3em; border-radi
 .bugc { color: #ff8a73; }
 .safec { color: #6fd39a; }
 
+.cta { margin: 36px 0 0; display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; }
+.cta span { color: var(--hero-muted); font-size: 15px; }
+.hero a.cta-btn {
+  display: inline-block; background: #8aa8ff; color: #16181d; font-weight: 600; text-decoration: none;
+  padding: 9px 18px; border-radius: 8px;
+}
+.hero a.cta-btn:hover { background: #a9c0ff; }
+
 /* Intro */
 .how { padding: 48px 0 8px; }
 h2 { font-size: 26px; line-height: 1.25; margin: 0 0 16px; font-weight: 600; }
@@ -209,3 +217,9 @@ footer { border-top: 1px solid var(--line); padding: 24px 0 40px; color: var(--m
   .abstraction .scroll { overflow-x: auto; }
   .abstraction svg { min-width: 640px; }
 }
+
+.run {
+  display: inline-block; margin: 4px 0 0; font-size: 14px; font-weight: 500; text-decoration: none;
+  border: 1px solid var(--accent); border-radius: 6px; padding: 4px 12px;
+}
+.run:hover { background: var(--accent); color: var(--bg); }

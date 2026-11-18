@@ -25,6 +25,8 @@
       <div><span class="big safec">6</span><span>fixes verified</span></div>
       <div><span class="big">≤ 0.04 s</span><span>per program</span></div>
     </div>
+    <p class="cta"><a class="cta-btn" href="playground/">Try Predator in your browser →</a>
+    <span>Clang and Predator compiled to WebAssembly. Your code stays on your computer.</span></p>
   </div>
 </header>
 
@@ -138,6 +140,7 @@ including the empty one.</p>
 <code>p</code> was freed on line 28. It also reports a leak on line 28: once the node is freed,
 nothing valid points to the rest of the list, so it can never be freed. One bug, two
 consequences.</p>
+      <a class="run" href="playground/#example=sll-free">Open in the playground ↗</a>
       <details>
         <summary>Whole program <span class="file">37 lines</span></summary>
         <pre class="full"><code><span class="k">#include</span> &lt;stdlib.h&gt;
@@ -193,6 +196,7 @@ consequences.</p>
       <p class="after">No errors and no warnings. Predator does not try lengths 0, 1, 2, …
 up to some bound. It finds a finite set of abstract heaps that covers lists of any length
 (see <a href="#how">How it works</a>), so this result holds for all of them.</p>
+      <a class="run" href="playground/#example=sll-free-fixed">Open in the playground ↗</a>
       <details>
         <summary>Whole program <span class="file">38 lines</span></summary>
         <pre class="full"><code><span class="k">#include</span> &lt;stdlib.h&gt;
@@ -263,6 +267,7 @@ so tests that only check the result for short lists can miss it.</p>
 then reads the new value, which is <code>prev</code>. The loop stops after the first node and the
 remaining nodes are unreachable. Predator reports the leak on the assignment that loses the last
 pointer to them.</p>
+      <a class="run" href="playground/#example=sll-reverse">Open in the playground ↗</a>
       <details>
         <summary>Whole program <span class="file">48 lines</span></summary>
         <pre class="full"><code><span class="k">#include</span> &lt;stdlib.h&gt;
@@ -328,6 +333,7 @@ pointer to them.</p>
       </div>
       <p class="after">With the successor saved first, every node stays reachable and
 <code>destroy()</code> frees all of them. Predator proves that for lists of any length.</p>
+      <a class="run" href="playground/#example=sll-reverse-fixed">Open in the playground ↗</a>
       <details>
         <summary>Whole program <span class="file">49 lines</span></summary>
         <pre class="full"><code><span class="k">#include</span> &lt;stdlib.h&gt;
@@ -410,6 +416,7 @@ the pointer, 8 bytes. The program compiles without a warning and often runs fine
       <p class="after">Writing <code>n-&gt;next</code> (offset 0) still fits into the 8 bytes.
 Writing <code>n-&gt;prev</code> on line 17 is the first access past the end of the block:
 <i>points 0B beyond a heap object of size 8B</i>.</p>
+      <a class="run" href="playground/#example=dll-sizeof">Open in the playground ↗</a>
       <details>
         <summary>Whole program <span class="file">36 lines</span></summary>
         <pre class="full"><code><span class="k">#include</span> &lt;stdlib.h&gt;
@@ -463,6 +470,7 @@ Writing <code>n-&gt;prev</code> on line 17 is the first access past the end of t
       </div>
       <p class="after">With the right size, all accesses are in bounds, and Predator also checks
 that the list is built and freed through the <code>prev</code> pointers without leaks.</p>
+      <a class="run" href="playground/#example=dll-sizeof-fixed">Open in the playground ↗</a>
       <details>
         <summary>Whole program <span class="file">36 lines</span></summary>
         <pre class="full"><code><span class="k">#include</span> &lt;stdlib.h&gt;
@@ -536,6 +544,7 @@ may also return <code>NULL</code>, and Predator checks both outcomes of each cal
       <p class="after">Both allocations can fail. Line 13 writes into a <code>NULL</code>
 <code>b</code>, and the <code>memset</code> on line 15 writes into a <code>NULL</code>
 <code>b-&gt;data</code>. (Predator reaches line 13 along two paths and reports it once for each.)</p>
+      <a class="run" href="playground/#example=oom">Open in the playground ↗</a>
       <details>
         <summary>Whole program <span class="file">33 lines</span></summary>
         <pre class="full"><code><span class="c">/* predator-args: oom */</span>
@@ -589,6 +598,7 @@ may also return <code>NULL</code>, and Predator checks both outcomes of each cal
       <p class="after">No more <code>NULL</code> dereferences, but if the second allocation fails,
 the function returns without freeing the first one. Error paths are rarely tested, and Predator
 checks them in the same way as the main path.</p>
+      <a class="run" href="playground/#example=oom-half">Open in the playground ↗</a>
       <details>
         <summary>Whole program <span class="file">37 lines</span></summary>
         <pre class="full"><code><span class="c">/* predator-args: oom */</span>
@@ -643,6 +653,7 @@ checks them in the same way as the main path.</p>
       </div>
       <p class="after">Each of the three outcomes (both allocations succeed, the first fails, the
 second fails) is now free of errors and leaks.</p>
+      <a class="run" href="playground/#example=oom-fixed">Open in the playground ↗</a>
       <details>
         <summary>Whole program <span class="file">39 lines</span></summary>
         <pre class="full"><code><span class="c">/* predator-args: oom */</span>
@@ -713,6 +724,7 @@ did not read the comment.</p>
       <p class="after">On the failure path, line 31 frees memory that <code>parse()</code> has
 already freed. The heap allocator can be corrupted this way, and double frees are often
 exploitable.</p>
+      <a class="run" href="playground/#example=double-free">Open in the playground ↗</a>
       <details>
         <summary>Whole program <span class="file">38 lines</span></summary>
         <pre class="full"><code><span class="k">#include</span> &lt;stdlib.h&gt;
@@ -768,6 +780,7 @@ exploitable.</p>
       </div>
       <p class="after">After <code>free(req-&gt;body)</code>, <code>parse()</code> stores
 <code>NULL</code>, and <code>free(NULL)</code> does nothing. Predator verifies both paths.</p>
+      <a class="run" href="playground/#example=double-free-fixed">Open in the playground ↗</a>
       <details>
         <summary>Whole program <span class="file">39 lines</span></summary>
         <pre class="full"><code><span class="k">#include</span> &lt;stdlib.h&gt;
@@ -839,6 +852,7 @@ structures.</p>
       <p class="after">The loop body frees <code>dev</code>, and then the macro computes the
 next entry from <code>dev-&gt;link.next</code>, a field of the freed block. This is why the kernel
 has <code>list_for_each_entry_safe</code>, and why reviewers keep asking for it.</p>
+      <a class="run" href="playground/#example=kernel-list">Open in the playground ↗</a>
       <details>
         <summary>Whole program <span class="file">63 lines</span></summary>
         <pre class="full"><code><span class="k">#include</span> &lt;stdlib.h&gt;
@@ -920,6 +934,7 @@ has <code>list_for_each_entry_safe</code>, and why reviewers keep asking for it.
       <p class="after"><code>list_for_each_entry_safe</code> reads the next entry before the body
 runs. Predator verifies the whole program: cyclic list, <code>container_of</code> arithmetic and
 all, for any number of devices.</p>
+      <a class="run" href="playground/#example=kernel-list-fixed">Open in the playground ↗</a>
       <details>
         <summary>Whole program <span class="file">69 lines</span></summary>
         <pre class="full"><code><span class="k">#include</span> &lt;stdlib.h&gt;
@@ -1006,7 +1021,8 @@ all, for any number of devices.</p>
     structures. Its precision is byte-level: block sizes, field offsets, pointer arithmetic, <code>memset</code>
     and <code>memcpy</code>, address alignment. Predator and its successor PredatorHP have won several medals
     in the memory-safety categories of <a href="https://sv-comp.sosy-lab.org/">SV-COMP</a>.</p>
-    <p>Want to try it on your own code? Build it from <a href="https://github.com/kdudka/predator">kdudka/predator</a>
+    <p>Want to try it on your own code? The <a href="playground/">playground</a> runs Predator in your
+    browser, or build it from <a href="https://github.com/kdudka/predator">kdudka/predator</a>
     (<code>./switch-host-gcc.sh /usr/bin/gcc</code>), then run
     <code>gcc -fplugin=sl_build/libsl.so -S -o /dev/null file.c</code>. More details are on the
     <a href="https://www.fit.vut.cz/research/group/verifit/public/tools/predator/">project page</a> and in the paper

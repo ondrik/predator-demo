@@ -26,3 +26,17 @@ A case can pass options to the analyser in its first line, e.g. `/* predator-arg
 
 `index.html` is generated but committed, so GitHub Pages can serve the repository as it is
 (*Settings → Pages → Deploy from a branch → master, / (root)*).
+
+## Playground
+
+`playground/` runs Predator in the browser: clang 14 and Predator's LLVM front-end, compiled to
+WebAssembly with Emscripten (`playground/predator.wasm`, about 27 MB) and run in a Web Worker.
+
+```
+wasm/driver.cc         clang -> -lowerswitch -global-vars -nestedgep -> Predator, in one process
+wasm/build.sh          builds everything:  wasm/build.sh WORK_DIR   (LLVM takes a few hours)
+wasm/test.mjs          checks the wasm build against cases/results.json:  node wasm/test.mjs
+playground/template.html, playground.js, playground.css, worker.js
+```
+
+`build.py` also renders `playground/index.html` and `playground/examples.json`.

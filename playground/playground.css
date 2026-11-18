@@ -1,0 +1,78 @@
+/* Playground layout; colours and type come from ../style.css */
+.bar { background: var(--hero-bg); color: var(--hero-ink); padding: 28px 0 22px; }
+.bar-inner { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; }
+.bar h1 { margin: 0; font-size: 32px; font-weight: 600; letter-spacing: -0.01em; }
+.bar .eyebrow { margin-bottom: 6px; }
+.back { color: #9fb7ff; font-size: 15px; }
+
+.play { max-width: 1280px; }
+.lede-sm { max-width: 860px; margin: 24px 0 18px; }
+
+.toolbar { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 14px 18px; margin-bottom: 14px; }
+.field { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); }
+.field select, .field input {
+  font: 14px "IBM Plex Mono", monospace; color: var(--ink); background: var(--surface);
+  border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; min-width: 0;
+}
+.field select { max-width: 340px; }
+.field input { width: 170px; }
+.opts { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 14px; padding-bottom: 6px; }
+.opts label { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+.opts code { font-size: 12px; color: var(--muted); background: var(--code-bg); padding: 0 4px; border-radius: 4px; }
+.actions { margin-left: auto; display: flex; gap: 8px; }
+button {
+  font: 500 15px "IBM Plex Sans", sans-serif; border-radius: 6px; padding: 7px 16px; cursor: pointer;
+  border: 1px solid var(--accent);
+}
+button.primary { background: var(--accent); color: var(--bg); }
+button.primary:hover { filter: brightness(1.1); }
+button.primary.stop { background: var(--bug); border-color: var(--bug); }
+button.ghost { background: transparent; color: var(--accent); }
+button.ghost:hover { background: var(--code-bg); }
+button:focus-visible, .field select:focus-visible, .field input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.panes { display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); gap: 12px; align-items: stretch; }
+.pane + .pane { margin-top: 0; }
+.editor-pane { display: flex; flex-direction: column; }
+.kbd { opacity: 0.8; }
+.CodeMirror {
+  height: 620px; font: 14px/1.55 "IBM Plex Mono", ui-monospace, monospace;
+  background: var(--surface); color: var(--ink);
+}
+.CodeMirror-gutters { background: var(--surface); border-right: 1px solid var(--line); }
+.CodeMirror-linenumber { color: var(--muted); opacity: 0.7; }
+.CodeMirror-cursor { border-left-color: var(--ink); }
+.CodeMirror-selected, .CodeMirror-focused .CodeMirror-selected { background: var(--code-bg); }
+.CodeMirror-focused .CodeMirror-selected { background: color-mix(in srgb, var(--accent) 22%, transparent); }
+.cm-s-default .cm-keyword, .cm-s-default .cm-meta, .cm-s-default .cm-type { color: var(--hl-keyword); }
+.cm-s-default .cm-string { color: var(--hl-string); }
+.cm-s-default .cm-comment { color: var(--hl-comment); font-style: italic; }
+.cm-s-default .cm-number, .cm-s-default .cm-atom { color: var(--hl-func); }
+.cm-s-default .cm-def, .cm-s-default .cm-variable, .cm-s-default .cm-variable-2, .cm-s-default .cm-variable-3,
+.cm-s-default .cm-operator, .cm-s-default .cm-property { color: var(--ink); }
+.cm-line-err { background: var(--bug-bg); }
+.cm-line-warn { background: var(--warn-bg); }
+.cm-callout { font: 500 13px "IBM Plex Mono", monospace; padding: 1px 0 3px 4px; white-space: pre-wrap; }
+.cm-callout.error { color: var(--bug); background: var(--bug-bg); }
+.cm-callout.warning { color: var(--warn); background: var(--warn-bg); }
+
+.result-pane { display: flex; flex-direction: column; }
+.result-pane .pane-label span:first-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.result-head { padding: 12px 14px 0; }
+.verdict.idle { color: #a9acb5; background: #2a2d34; }
+.verdict.busy { color: #8cc4ff; background: #1c2a3d; }
+.result-pane .term { flex: 1; min-height: 160px; max-height: 560px; overflow: auto; }
+.term a.loc { color: #a9acb5; text-decoration: underline dotted; }
+.term a.loc:hover { color: #e4e2dc; }
+
+.notes { margin: 40px 0 8px; max-width: 860px; }
+.notes h2 { font-size: 20px; }
+.notes li { margin-bottom: 8px; }
+
+@media (max-width: 900px) {
+  .panes { grid-template-columns: minmax(0, 1fr); }
+  .CodeMirror { height: 440px; }
+  .actions { margin-left: 0; }
+  .field select { max-width: 100%; }
+}
+.bar .wrap { max-width: 1280px; }

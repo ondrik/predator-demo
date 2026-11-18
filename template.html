@@ -25,6 +25,8 @@
       <div><span class="big safec">{{PROVED}}</span><span>fixes verified</span></div>
       <div><span class="big">≤ {{SLOWEST}} s</span><span>per program</span></div>
     </div>
+    <p class="cta"><a class="cta-btn" href="playground/">Try Predator in your browser →</a>
+    <span>Clang and Predator compiled to WebAssembly. Your code stays on your computer.</span></p>
   </div>
 </header>
 
@@ -115,7 +117,8 @@
     structures. Its precision is byte-level: block sizes, field offsets, pointer arithmetic, <code>memset</code>
     and <code>memcpy</code>, address alignment. Predator and its successor PredatorHP have won several medals
     in the memory-safety categories of <a href="https://sv-comp.sosy-lab.org/">SV-COMP</a>.</p>
-    <p>Want to try it on your own code? Build it from <a href="https://github.com/kdudka/predator">kdudka/predator</a>
+    <p>Want to try it on your own code? The <a href="playground/">playground</a> runs Predator in your
+    browser, or build it from <a href="https://github.com/kdudka/predator">kdudka/predator</a>
     (<code>./switch-host-gcc.sh /usr/bin/gcc</code>), then run
     <code>gcc -fplugin=sl_build/libsl.so -S -o /dev/null file.c</code>. More details are on the
     <a href="https://www.fit.vut.cz/research/group/verifit/public/tools/predator/">project page</a> and in the paper

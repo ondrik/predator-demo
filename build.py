@@ -306,6 +306,7 @@ def render_step(number, step, previous, results):
         <pre class="term">{render_output(result['output'])}</pre>
       </div>
       <p class="after">{step['after']}</p>
+      <a class="run" href="playground/#example={step['case']}">Open in the playground ↗</a>
       <details>
         <summary>Whole program <span class="file">{len(lines)} lines</span></summary>
         <pre class="full"><code>{"".join(highlight_c(l) + chr(10) for l in lines)}</code></pre>
@@ -352,6 +353,26 @@ def main():
         page = page.replace("{{" + key + "}}", value)
     (ROOT / "index.html").write_text(page)
     print(f"index.html: {len(STORIES)} stories, {len(shown)} programs")
+    build_playground(results_file)
+
+
+def build_playground(results_file):
+    examples = []
+    for story in STORIES:
+        for step in story["steps"]:
+            first = (ROOT / "cases" / f"{step['case']}.c").read_text().splitlines()[0]
+            m = re.match(r"/\* predator-args: (.*) \*/", first)
+            examples.append({"id": step["case"], "story": story["title"], "label": step["label"],
+                             "args": m.group(1).split(",") if m else []})
+    (ROOT / "playground" / "examples.json").write_text(json.dumps(examples, indent=1) + "\n")
+    wasm = ROOT / "playground" / "predator.wasm"
+    size = f"{wasm.stat().st_size / 1e6:.0f} MB" if wasm.exists() else "40 MB"
+    page = (ROOT / "playground" / "template.html").read_text()
+    for key, value in {"SIZE": size, "PREDATOR": html.escape(results_file["predator"]),
+                       "LLVM": "14.0.6", "REPO": REPO}.items():
+        page = page.replace("{{" + key + "}}", value)
+    (ROOT / "playground" / "index.html").write_text(page)
+    print(f"playground/index.html: {len(examples)} examples, analyser {size}")
 
 
 if __name__ == "__main__":

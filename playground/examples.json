@@ -1,0 +1,86 @@
+[
+ {
+  "id": "sll-free",
+  "story": "Use after free while destroying a list",
+  "label": "The original loop",
+  "args": []
+ },
+ {
+  "id": "sll-free-fixed",
+  "story": "Use after free while destroying a list",
+  "label": "The fix: save the successor first",
+  "args": []
+ },
+ {
+  "id": "sll-reverse",
+  "story": "Losing a list while reversing it",
+  "label": "Assignments in the wrong order",
+  "args": []
+ },
+ {
+  "id": "sll-reverse-fixed",
+  "story": "Losing a list while reversing it",
+  "label": "The fix: save, relink, advance",
+  "args": []
+ },
+ {
+  "id": "dll-sizeof",
+  "story": "Allocating the size of a pointer",
+  "label": "The original allocation",
+  "args": []
+ },
+ {
+  "id": "dll-sizeof-fixed",
+  "story": "Allocating the size of a pointer",
+  "label": "The fix: sizeof the object",
+  "args": []
+ },
+ {
+  "id": "oom",
+  "story": "Unchecked malloc",
+  "label": "No checks at all",
+  "args": [
+   "oom"
+  ]
+ },
+ {
+  "id": "oom-half",
+  "story": "Unchecked malloc",
+  "label": "The quick fix: return NULL on failure",
+  "args": [
+   "oom"
+  ]
+ },
+ {
+  "id": "oom-fixed",
+  "story": "Unchecked malloc",
+  "label": "The fix: clean up on the error path",
+  "args": [
+   "oom"
+  ]
+ },
+ {
+  "id": "double-free",
+  "story": "Double free on an error path",
+  "label": "Both functions free the body",
+  "args": []
+ },
+ {
+  "id": "double-free-fixed",
+  "story": "Double free on an error path",
+  "label": "The fix: reset the pointer",
+  "args": []
+ },
+ {
+  "id": "kernel-list",
+  "story": "Freeing while iterating a Linux kernel list",
+  "label": "Deleting inside list_for_each_entry",
+  "args": []
+ },
+ {
+  "id": "kernel-list-fixed",
+  "story": "Freeing while iterating a Linux kernel list",
+  "label": "The fix: the _safe iterator",
+  "args": []
+ }
+]

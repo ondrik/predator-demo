@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Predator playground</title>
+<meta name="description" content="Run the Predator shape analyser on your own C programs, in the browser. Predator and clang are compiled to WebAssembly; your code never leaves your computer.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
+<link rel="stylesheet" href="../style.css">
+<link rel="stylesheet" href="playground.css">
+</head>
+<body>
+<header class="bar">
+  <div class="wrap bar-inner">
+    <div>
+      <p class="eyebrow">Predator · shape analysis for C</p>
+      <h1>Playground</h1>
+    </div>
+    <a class="back" href="../">← Examples and how it works</a>
+  </div>
+</header>
+
+<main class="wrap play">
+  <p class="lede-sm">Write or paste a C program and run Predator on it. Clang and Predator are compiled to
+  WebAssembly and run in your browser, so your code never leaves your computer. The first run downloads
+  the analyser (about {{SIZE}}, cached afterwards). Use <code>__VERIFIER_nondet_int()</code> for unknown
+  input: Predator follows both outcomes of every condition that depends on it.</p>
+
+  <div class="toolbar">
+    <label class="field">Example
+      <select id="example"></select>
+    </label>
+    <label class="field">File
+      <input id="filename" value="program.c" spellcheck="false">
+    </label>
+    <div class="opts">
+      <label title="every malloc() may return NULL"><input type="checkbox" data-arg="oom"> malloc can fail <code>oom</code></label>
+      <label title="report the use of uninitialised values"><input type="checkbox" data-arg="track_uninit"> uninitialised values <code>track_uninit</code></label>
+      <label title="report memory leaks also when exit() is called"><input type="checkbox" data-arg="exit_leaks"> leaks at exit <code>exit_leaks</code></label>
+    </div>
+    <div class="actions">
+      <button id="share" class="ghost" type="button">Copy link</button>
+      <button id="run" class="primary" type="button">Run Predator</button>
+    </div>
+  </div>
+
+  <div class="panes">
+    <div class="pane editor-pane">
+      <div class="pane-label"><span id="editor-label">program.c</span><span class="kbd">Ctrl+Enter to run</span></div>
+      <textarea id="code" spellcheck="false"></textarea>
+    </div>
+    <div class="pane out result-pane">
+      <div class="pane-label"><span id="cmdline">$ predator program.c</span><span id="timer"></span></div>
+      <div class="result-head"><span id="verdict" class="verdict idle">not run yet</span></div>
+      <pre class="term" id="output">Press “Run Predator”. Locations in the output are clickable.</pre>
+    </div>
+  </div>
+
+  <section class="notes">
+    <h2>Good to know</h2>
+    <ul>
+      <li>This is Predator's <b>LLVM front-end</b>: clang 14 compiles your program to LLVM IR for x86-64, and Predator
+        analyses that. The examples on the <a href="../">main page</a> were recorded with the GCC plug-in. Both report the
+        same errors on them; column numbers can differ slightly.</li>
+      <li>Predator analyses a <b>whole program</b> starting from <code>main</code>. Functions without a body (other than the
+        C library functions Predator knows) are treated as unknown, and Predator says so.</li>
+      <li>The standard C headers come from <a href="https://musl.libc.org/">musl</a>. Predator's own builtins
+        (<code>__VERIFIER_plot</code>, <code>___sl_error</code>, …) are available from
+        <code>#include &lt;verifier-builtins.h&gt;</code>.</li>
+      <li>The analysis can take long, or not terminate, on programs outside Predator's scope: large arrays indexed by
+        unknown values, arithmetic-heavy loops, trees. <b>Stop</b> cancels it.</li>
+    </ul>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">Predator {{PREDATOR}} (LLVM front-end) with clang {{LLVM}}, compiled with Emscripten; see
+  <a href="{{REPO}}/tree/master/wasm">wasm/</a> for the build. Source of this page:
+  <a href="{{REPO}}">ondrik/predator-demo</a>.</div>
+</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/clike/clike.min.js"></script>
+<script src="playground.js"></script>
+</body>
+</html>
